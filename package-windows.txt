@@ -1,0 +1,11 @@
+#This is a file that is included with the flext Makefiles
+#when you run the build script
+
+NAME=np_nifalcon
+SRCS=./src/np_nifalcon.flext.cpp 
+#CFLAGS=-I/usr/include -I/usr/local/include
+#ifdef SHARED
+#	LIBS += -DLIBFTDI -lnifalcon_libftdi -lftdi
+#else
+#	LIBS += -DLIBFTDI -lnifalcon_libftdi_s -lftdi_s -lusb_s
+#endif

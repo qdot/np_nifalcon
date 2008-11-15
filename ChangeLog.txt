@@ -1,0 +1,15 @@
+np_nifalcon ChangeLog
+===========================
+
+2008-10-18 Kyle Machulis <kyle@nonpolynomial.com>
+	* Release v1.0.b1
+	* Changed external to use C++ libnifalcon core
+	* Added flext threading to decouple I/O
+	* Updated Pd External Help File
+2008-07-31 Kyle Machulis <kyle@nonpolynomial.com>
+	* Release v0.2
+	* Added homing bit input
+	* Fixed flext package file to not use _s hack for static libs
+	* Updated Pd External Help File	
+2008-04-05 Kyle Machulis <kyle@nonpolynomial.com>
+	* First release of np_nifalcon PD/Max external
