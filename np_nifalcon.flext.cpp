@@ -40,29 +40,28 @@ class np_nifalcon:
  
 	public:
 	// constructor
-	np_nifalcon() : m_runThread(false), m_isInited(false), m_inRawMode(true), m_errorCount(0), m_ledState(0), m_homingMode(false)
+	np_nifalcon() : m_runThread(false), m_isInited(false), m_inRawMode(true), m_errorCount(0)
 	{
 		m_falconDevice.setFalconComm<FalconCommLibFTDI>();
 		m_falconDevice.setFalconFirmware<FalconFirmwareNovintSDK>();
 		m_falconDevice.setFalconGrip<FalconGripFourButton>();
-		m_falconDevice.setFalconKinematic<FalconKinematicStamper>();
 
-		for(int i = 0; i < 3; ++i)
-		{
-			m_motorVectorForce[i] = 0;
-			m_motorRawForce[i] = 0;
-		}
-
-		AddInAnything("Command Input");
-		AddInList("Motor - Raw input to motors (3 ints)");
-		AddInList("Motor - Forces as cartesian vector (3 floats)");
-		AddInList("LEDS (RGB, 3 Ints)");
+		AddInAnything("Command Input");		
+		AddInInt("Motor 1 - Torque");
+		AddInInt("Motor 2 - Torque");
+		AddInInt("Motor 3 - Torque");
+		AddInInt("LED - Red");
+		AddInInt("LED - Green");
+		AddInInt("LED - Blue");
 		AddInInt("Homing Mode");
 		AddOutBang("Bangs on successful connection/command");
-		AddOutList("Encoder Values (Top, right, left when looking at front of falcon)");
-		AddOutList("Cartesian Position (X, Y, Z of the end effector in relation to the fixed frame origin)");
-		AddOutList("Buttons - Digital");
-		AddOutList("Button - Analog");
+		AddOutInt("Motor 1 - Encoder");
+		AddOutInt("Motor 2 - Encoder");
+		AddOutInt("Motor 3 - Encoder");
+		AddOutInt("Button 1");
+		AddOutInt("Button 2");
+		AddOutInt("Button 3");
+		AddOutInt("Button 4");		
 		AddOutInt("Homing Status");
 
 		FLEXT_ADDMETHOD_(0, "start", nifalcon_update);
@@ -72,32 +71,33 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD_(0, "close", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "stop", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "raw", nifalcon_anything);
-		FLEXT_ADDMETHOD_(0, "vector", nifalcon_anything);
-		FLEXT_ADDMETHOD(1, nifalcon_motor_raw);
-		FLEXT_ADDMETHOD(2, nifalcon_motor_vector);
-		FLEXT_ADDMETHOD(3, nifalcon_led);
-		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
+		FLEXT_ADDMETHOD_(0, "kinematic", nifalcon_anything);
+		FLEXT_ADDMETHOD(1, nifalcon_motor1);
+		FLEXT_ADDMETHOD(2, nifalcon_motor2);
+		FLEXT_ADDMETHOD(3, nifalcon_motor3);
+		FLEXT_ADDMETHOD(4, nifalcon_led_r);
+		FLEXT_ADDMETHOD(5, nifalcon_led_g);
+		FLEXT_ADDMETHOD(6, nifalcon_led_b);
+		FLEXT_ADDMETHOD(7, nifalcon_homing_mode);
 
-		post("Novint Falcon External, by Nonpolynomial Labs (http://www.nonpolynomial.com)");
+		post("Novint Falcon External, by Nonpolynomial Labs. Based on Flext");
 	} 
 	 
 	virtual ~np_nifalcon()
 	{
+		//nifalcon_close(&mFalcon);
 		m_falconDevice.close();
 	}
 	 
 protected:
 	FalconDevice m_falconDevice;
-	bool m_inRawMode;
-	bool m_isInited;
-	bool m_runThread;
-	int m_errorCount;
-	int m_ledState;
-	double m_motorVectorForce[3];
-	int16_t m_motorRawForce[3];
-	bool m_homingMode;
+	volatile bool m_inRawMode;
+	volatile bool m_isInited;
+	volatile bool m_runThread;
+	volatile int m_errorCount;
+	double m_motorForce[3];
+	
 	ThrCond m_threadCond;
-	ThrMutex m_threadMutex;
 	
 	void nifalcon_post_error()
 	{
@@ -185,11 +185,31 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "raw"))
 		{
+			if(m_inRawMode) return;
+			if(m_runThread)
+			{
+				post("np_nifalcon: I/O THREAD STOPPED");
+				m_runThread = false;
+				m_threadCond.Wait();
+			}
+			m_falconDevice.removeFalconKinematic();
 			m_inRawMode = true;
+			post("np_nifalcon: Raw mode set");
+			return;
 		}
-		else if (!strcmp(msg->s_name, "vector"))
+		else if (!strcmp(msg->s_name, "kinematic"))
 		{
+			if(!m_inRawMode) return;
+			if(m_runThread)
+			{
+				post("np_nifalcon: I/O THREAD STOPPED");
+				m_runThread = false;
+				m_threadCond.Wait();
+			}
+			m_falconDevice.setFalconKinematic<FalconKinematicStamper>();
 			m_inRawMode = false;
+			post("np_nifalcon: Kinematic mode set");
+			return;
 		}
 		else
 		{
@@ -210,154 +230,126 @@ protected:
 			return;
 		}
 		m_runThread = true;
-
-		int i = 0, buttons = 0;
-		bool homing_state = false;
-		int16_t motor_state[3] = {0, 0, 0};
-		float coordinate_state[3] = {0.0, 0.0, 0.0};
-		uint8_t button_state = 0;
-		
-		t_atom motor_list[3];
-		for(i = 0; i < 3; ++i) SetInt(motor_list[i], 0);
-		t_atom coordinate_list[3];
-		for(i = 0; i < 3; ++i) SetFloat(coordinate_list[i], 0);
-		t_atom button_list[4];
-		for(i = 0; i < 4; ++i) SetInt(button_list[i], 0);
-		//t_atom analog_list[];
-		bool motor_changed = false;
-		bool coordinate_changed = false;
-
 		while(1)
 		{			
 			if(!m_runThread)
 			{
 				break;
 			}
-
-			m_threadMutex.Lock();
-			
 			if(!m_inRawMode)
 			{
-				//double a[3] = {0.0, 0.0, 0.0};
-				m_falconDevice.setForce(m_motorVectorForce);
+				m_falconDevice.setForce(m_motorForce);
 			}
-			else
-			{
-				m_falconDevice.getFalconFirmware()->setForces(m_motorRawForce);
-			}
-			
-			m_falconDevice.getFalconFirmware()->setHomingMode(m_homingMode);
-			
-			m_falconDevice.getFalconFirmware()->setLEDStatus(m_ledState);
-			m_threadMutex.Unlock();
-			
+			int i, buttons;
+			bool homing_state;
+			int16_t motor_state[3];
+			float coordinate_state[3];
+			uint8_t button_state;
 			if(m_falconDevice.runIOLoop())
 			{
-				motor_changed = false;
-				coordinate_changed = false;
-				
-				//Output encoder values
-				for(i = 0; i < 3; ++i)
+				if(m_inRawMode)
 				{
-					if(motor_state[i] != m_falconDevice.getFalconFirmware()->getEncoderValues()[i])
+					for(i = 0; i < 3; ++i)
 					{
-						motor_state[i] = m_falconDevice.getFalconFirmware()->getEncoderValues()[i];
-						SetInt(motor_list[i], motor_state[i]);
-						motor_changed = true;
-					}					
-				}
-				if(motor_changed) ToOutList(1, 3, motor_list);
-				
-				//Output kinematics values
-				for(i = 0; i < 3; ++i)
-				{
-					if(coordinate_state[i] != m_falconDevice.getPosition()[i])
-					{
-						coordinate_state[i] = m_falconDevice.getPosition()[i];
-						SetFloat(coordinate_list[i], coordinate_state[i]);
-						coordinate_changed = true;
+						if(motor_state[i] != m_falconDevice.getFalconFirmware()->getEncoderValues()[i])
+						{
+							motor_state[i] = m_falconDevice.getFalconFirmware()->getEncoderValues()[i];
+							ToOutInt(i+1, motor_state[i]);
+						}
 					}
 				}
-				if(coordinate_changed) ToOutList(2, 3, coordinate_list);
-				
-				//Output digital values
+				else
+				{
+					for(i = 0; i < 3; ++i)
+					{
+						if(coordinate_state[i] != m_falconDevice.getPosition()[i])
+						{
+							coordinate_state[i] = m_falconDevice.getPosition()[i];
+							ToOutInt(i+1, coordinate_state[i]);
+						}
+					}
+				}
 				buttons = m_falconDevice.getFalconGrip()->getDigitalInputs();
 				if(button_state != buttons)
 				{
 					for(i = 0; i < 4; ++i)
 					{
-						SetInt(button_list[i], buttons & (1 << i));
+						if((buttons & (1 << i)) != (button_state & (1 << i)))
+						{							
+							ToOutInt(4 + i, (buttons & (1 << i)));
+						}
 					}
 					button_state = buttons;
-					ToOutList(3, 4, button_list);
 				}
-
-				//Output analog values
-				//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
-				
-				//Output homing values
 				if(m_falconDevice.getFalconFirmware()->isHomed() != homing_state)
 				{
 					homing_state = m_falconDevice.getFalconFirmware()->isHomed();
-					ToOutInt(5, homing_state);
+					ToOutInt(8, homing_state);
 				}
-				ToOutBang(0);
 			}
 			else
 			{
 				++m_errorCount;
-				post("np_nifalcon: IO Loop Error %d : %d",m_errorCount, m_falconDevice.getErrorCode());
+				post("np_nifalcon: IO Loop Error %d",m_errorCount);
 			}
             flext::ThrYield();
 		}
 		m_threadCond.Signal();
 	}
 
-	void nifalcon_motor_raw(int motor_1, int motor_2, int motor_3)
+	void nifalcon_motor1(double d)
 	{
-		m_threadMutex.Lock();
-		if(!m_inRawMode) post("Falcon in vector force mode, raw input ignored");
-		m_motorRawForce[0] = motor_1;
-		m_motorRawForce[1] = motor_2;
-		m_motorRawForce[2] = motor_3;
-		m_threadMutex.Unlock();
-					
+		m_motorForce[0] = d;
 	}
 	
-	void nifalcon_motor_vector(float x, float y, float z)
+	void nifalcon_motor2(double d)
 	{
-		m_threadMutex.Lock();
-		if(m_inRawMode) post("Falcon in raw mode, vector force input ignored");
-		m_motorVectorForce[0] = x;
-		m_motorVectorForce[1] = y;
-		m_motorVectorForce[2] = z;
-		m_threadMutex.Unlock();
+		m_motorForce[1] = d;
 	}
 	
-	void nifalcon_led(int red, int green, int blue)
+	void nifalcon_motor3(double d)
 	{
-		m_threadMutex.Lock();		
-		if(red > 0) m_ledState |= FalconFirmware::RED_LED;
-		else m_ledState &= ~FalconFirmware::RED_LED;
-		if(green > 0) m_ledState |= FalconFirmware::GREEN_LED;
-		else m_ledState &= ~FalconFirmware::GREEN_LED;
-		if(blue > 0) m_ledState |= FalconFirmware::BLUE_LED;
-		else m_ledState &= ~FalconFirmware::BLUE_LED;
-		m_threadMutex.Unlock();				
+		m_motorForce[2] = d;
 	}
 	
+	void nifalcon_led_r(long t)
+	{
+		u_int8_t led = m_falconDevice.getFalconFirmware()->getLEDStatus();
+		if(t) led |= FalconFirmware::RED_LED;
+		else led &= ~FalconFirmware::RED_LED;
+		m_falconDevice.getFalconFirmware()->setLEDStatus(led);
+	}
+	
+	void nifalcon_led_g(long t)
+	{
+		u_int8_t led = m_falconDevice.getFalconFirmware()->getLEDStatus();
+		if(t) led |= FalconFirmware::GREEN_LED;
+		else led &= ~FalconFirmware::GREEN_LED;
+		m_falconDevice.getFalconFirmware()->setLEDStatus(led);
+	}
+	
+	void nifalcon_led_b(long t)
+	{
+		u_int8_t led = m_falconDevice.getFalconFirmware()->getLEDStatus();
+		if(t) led |= FalconFirmware::BLUE_LED;
+		else led &= ~FalconFirmware::BLUE_LED;
+		m_falconDevice.getFalconFirmware()->setLEDStatus(led);
+	}
+
 	void nifalcon_homing_mode(long t)
 	{
-		m_threadMutex.Lock();
-		m_homingMode = (t > 0);
-		m_threadMutex.Unlock();	   		
+		if(t) m_falconDevice.getFalconFirmware()->setHomingMode(true);
+		else m_falconDevice.getFalconFirmware()->setHomingMode(false);
 	}
 		
 private:
 	FLEXT_CALLBACK_A(nifalcon_anything)
-	FLEXT_CALLBACK_III(nifalcon_motor_raw)
-	FLEXT_CALLBACK_FFF(nifalcon_motor_vector)
-	FLEXT_CALLBACK_III(nifalcon_led)
+	FLEXT_CALLBACK_F(nifalcon_motor1)
+	FLEXT_CALLBACK_F(nifalcon_motor2)
+	FLEXT_CALLBACK_F(nifalcon_motor3)
+	FLEXT_CALLBACK_I(nifalcon_led_r)
+	FLEXT_CALLBACK_I(nifalcon_led_g)
+	FLEXT_CALLBACK_I(nifalcon_led_b)
 	FLEXT_CALLBACK_I(nifalcon_homing_mode)
 	FLEXT_THREAD(nifalcon_update)
 };
