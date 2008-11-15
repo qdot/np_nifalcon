@@ -1,74 +1,77 @@
-#N canvas 658 273 547 333 10;
+#N canvas 558 258 547 333 10;
 #X obj 213 193 np_nifalcon;
-#X msg 92 22 open;
+#X msg 93 22 open;
 #X msg 141 61 close;
+#X obj 278 149 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+2;
+#X obj 296 149 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+2;
+#X obj 259 149 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+2;
 #X msg 66 2 count;
+#X text 175 262 motor encoders;
+#X text 171 246 top;
+#X text 206 247 right;
+#X text 250 247 left;
+#X text 300 248 buttons;
+#X obj 135 231 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X text 48 247 bangs on success;
 #X text 112 2 print count of devices to pd window;
 #X text 131 22 open device;
+#X text 180 61 close device;
+#X text 6 286 See http://www.nonpolynomial.com/libnifalcon/np_nifalcon
+for more information;
+#X text 221 76 Motor Torque (~-1600 to ~1600);
+#X text 254 132 LEDs (R G B);
+#X text 367 250 homing;
 #X text 264 27 send firmware;
+#X obj 310 168 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+1;
+#X text 328 168 Homing Mode;
+#X text 328 183 Highly recommended this be on;
+#X text 327 198 at all times;
 #X msg 184 111 stop;
 #X msg 165 87 start;
 #X msg 118 42 init /Users/qdot/test_firmware.bin;
-#X msg 69 83 raw;
-#X obj 475 161 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X msg 20 61 kinematic;
+#X msg 30 115 raw;
+#X obj 241 116 expr if($f1 < 120 \, 10 * (120.0 - $f1) \, 0);
+#X obj 342 139 loadbang;
+#X obj 388 229 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
-#X obj 475 138 loadbang;
-#X msg 26 63 vector;
-#X obj 305 231 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
-1;
-#X obj 35 257 unpack 0 0 0;
-#X obj 157 257 unpack 0 0 0;
-#X obj 288 256 unpack 0 0 0 0;
-#X floatatom 35 288 5 0 0 0 - - -;
-#X floatatom 75 289 5 0 0 0 - - -;
-#X floatatom 116 290 5 0 0 0 - - -;
-#X floatatom 158 290 5 0 0 0 - - -;
-#X floatatom 197 290 5 0 0 0 - - -;
-#X floatatom 237 290 5 0 0 0 - - -;
-#X obj 289 289 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
-1;
-#X obj 320 289 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
-2;
-#X obj 352 289 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
-4;
-#X obj 383 289 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 355 233 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 8;
-#X obj 210 150 pack 0 0 0;
-#X obj 290 150 pack 0 0 0;
-#X obj 435 114 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 333 233 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+4;
+#X obj 312 233 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+2;
+#X obj 291 234 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X obj 401 114 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
-1;
-#X obj 367 113 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
-1;
-#X obj 374 150 pack 0 0 0;
-#X connect 0 1 15 0;
-#X connect 0 2 16 0;
-#X connect 0 3 17 0;
-#X connect 0 5 14 0;
+#X floatatom 209 234 5 0 0 0 - - -;
+#X floatatom 167 234 5 0 0 0 - - -;
+#X floatatom 251 235 5 0 0 0 - - -;
+#X connect 0 0 12 0;
+#X connect 0 1 39 0;
+#X connect 0 2 38 0;
+#X connect 0 3 31 0;
+#X connect 0 3 40 0;
+#X connect 0 4 37 0;
+#X connect 0 5 36 0;
+#X connect 0 6 35 0;
+#X connect 0 7 34 0;
+#X connect 0 8 33 0;
 #X connect 1 0 0 0;
 #X connect 2 0 0 0;
-#X connect 3 0 0 0;
-#X connect 7 0 0 0;
-#X connect 8 0 0 0;
-#X connect 9 0 0 0;
-#X connect 10 0 0 0;
-#X connect 11 0 0 4;
-#X connect 12 0 11 0;
-#X connect 13 0 0 0;
-#X connect 15 0 18 0;
-#X connect 15 1 19 0;
-#X connect 15 2 20 0;
-#X connect 16 0 21 0;
-#X connect 16 1 22 0;
-#X connect 16 2 23 0;
-#X connect 17 0 24 0;
-#X connect 17 1 25 0;
-#X connect 17 2 26 0;
-#X connect 17 3 27 0;
-#X connect 28 0 0 1;
-#X connect 29 0 0 2;
-#X connect 30 0 33 2;
-#X connect 31 0 33 1;
-#X connect 32 0 33 0;
-#X connect 33 0 0 3;
+#X connect 3 0 0 5;
+#X connect 4 0 0 6;
+#X connect 5 0 0 4;
+#X connect 6 0 0 0;
+#X connect 22 0 0 7;
+#X connect 26 0 0 0;
+#X connect 27 0 0 0;
+#X connect 28 0 0 0;
+#X connect 29 0 0 0;
+#X connect 30 0 0 0;
+#X connect 31 0 0 3;
+#X connect 32 0 22 0;
