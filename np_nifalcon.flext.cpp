@@ -17,11 +17,19 @@
 
 // include flext header
 #include <flext.h>
+
+//god damnit, cycling '74. 
+#ifdef PI
+#undef PI
+#endif
+
 #include "falcon/core/FalconDevice.h"
 #include "falcon/comm/FalconCommLibFTDI.h"
 #include "falcon/grip/FalconGripFourButton.h"
 #include "falcon/kinematic/FalconKinematicStamper.h"
 #include "falcon/firmware/FalconFirmwareNovintSDK.h"
+#include "falcon/util/FalconFirmwareBinaryNvent.h"
+
 
 #if !defined(FLEXT_VERSION) || (FLEXT_VERSION < 400)
 #error You need at least flext version 0.4.0
@@ -69,6 +77,7 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD_(0, "open", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "count", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "init", nifalcon_anything);
+		FLEXT_ADDMETHOD_(0, "nvent_firmware", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "close", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "stop", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "raw", nifalcon_anything);
@@ -171,6 +180,28 @@ protected:
 			m_isInited = true;
 			post("np_nifalcon: Falcon init finished");
 		}
+		else if (!strcmp(msg->s_name, "nvent_firmware"))
+		{
+			if(m_falconDevice.isFirmwareLoaded())
+			{
+				m_isInited = true;
+				post("np_nifalcon: Firmware already loaded, skipping...");
+				return;
+			}
+			for(int i = 0; i < 10; ++i)
+			{
+				if(m_falconDevice.getFalconFirmware()->loadFirmware(true, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
+				{
+					m_isInited = true;
+					break;
+				}
+			}
+			if(m_isInited)			
+				post("np_nifalcon: loading nvent firmware finished");
+			else
+				post("np_nifalcon: loading nvent firmware FAILED");
+		}
+
 		else if (!strcmp(msg->s_name, "close"))
 		{
 			m_isInited = false;
@@ -306,7 +337,7 @@ protected:
 			else
 			{
 				++m_errorCount;
-				post("np_nifalcon: IO Loop Error %d : %d",m_errorCount, m_falconDevice.getErrorCode());
+				//post("np_nifalcon: IO Loop Error %d : %d",m_errorCount, m_falconDevice.getErrorCode());
 			}
             flext::ThrYield();
 		}
