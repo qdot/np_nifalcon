@@ -23,7 +23,7 @@ Flext: http://www.parasitaere-kapazitaeten.net/ext/flext/
 Licensing
 =========
 
-libnifalcon is covered under the MIT License.
+libnifalcon is covered under the BSD License.
 
 flext and np_nifalcon source code are covered under the GPL v2 License.
 
@@ -51,12 +51,4 @@ Linux
 -----
 
 - No Max/MSP build is available for linux as Max/MSP is not available for linux
-- np_nifalcon requires either root access (i.e. running pd under sudo) or correct udev based USB permissions to run as non-root. If you're using a udev based system, check out http://noisybox.net/computers/p5glove/ for instructions on setting up udev properly.
-
-
----
-Mac
----
-
-- It is HIGHLY recommended that you use a libftdi version of libnifalcon for OS X
-
+- np_nifalcon requires either root access (i.e. running pd under sudo) or correct udev based USB permissions to run as non-root. If you're using a udev based system, check out the udev sample files in the linux directory of the libnifalcon source distribution (v1.0 beta 1 and later)

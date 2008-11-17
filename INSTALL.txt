@@ -15,8 +15,8 @@ nplabs externals are test built by having the external directory in the same roo
 
 - root
 -- flext dir
--- nplabs.nifalcon
--- nplabs.trancevibe
+-- np_nifalcon
+-- np_trancevibe
 etc...
 
 After flext is built and installed, go into the nplabs external dir and rename the package-PLATFORM.txt file that corresponds to your platform to package.txt. Edit the file as needed to make the configuration settings correct.
@@ -39,7 +39,7 @@ Test Machines
 
 All NP labs externals are compiled and tested on the following platforms:
 
-- Windows (XP Pro, Core Duo (32-bit), Visual Studio 2003)
+- Windows (XP Pro, Visual Studio 2003)
 - OS X (10.5.WhateverIsNewest, Intel, gcc 4)
 - Linux (Ubuntu 8.04, gcc 4)
 
