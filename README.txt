@@ -5,6 +5,11 @@ np_nifalcon Max/MSP External
 by Kyle Machulis <kyle@nonpolynomial.com>
 Nonpolynomial Labs - http://www.nonpolynomial.com
 
+Contributors:
+
+Edgar Berdahl
+http://ccrma.stanford.edu/~eberdahl/
+
 ===========
 Description
 ===========
