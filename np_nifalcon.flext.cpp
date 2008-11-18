@@ -24,7 +24,13 @@
 #endif
 
 #include "falcon/core/FalconDevice.h"
+#if defined(NIFALCON_LIBFTDI)
 #include "falcon/comm/FalconCommLibFTDI.h"
+#elif defined(NIFALCON_LIBUSB)
+#include "falcon/comm/FalconCommLibUSB.h"
+#elif defined(NIFALCON_FTD2XX)
+#include "falcon/comm/FalconCommFTD2XX.h"
+#endif
 #include "falcon/grip/FalconGripFourButton.h"
 #include "falcon/kinematic/FalconKinematicStamper.h"
 #include "falcon/firmware/FalconFirmwareNovintSDK.h"
@@ -52,9 +58,15 @@ class np_nifalcon:
 	{
 #ifdef LINUX_HACK
 		m_falconDevice.setCleanupObjects(false);
-#endif LINUX_HACK
-		
+#endif //LINUX_HACK
+
+#if defined(NIFALCON_LIBFTDI)
 		m_falconDevice.setFalconComm<FalconCommLibFTDI>();
+#elif defined(NIFALCON_LIBUSB)
+		m_falconDevice.setFalconComm<FalconCommLibUSB>();
+#elif defined(NIFALCON_FTD2XX)
+		m_falconDevice.setFalconComm<FalconCommFTD2XX>();
+#endif
 		m_falconDevice.setFalconFirmware<FalconFirmwareNovintSDK>();
 		m_falconDevice.setFalconGrip<FalconGripFourButton>();
 		m_falconDevice.setFalconKinematic<FalconKinematicStamper>();

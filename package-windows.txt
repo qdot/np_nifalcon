@@ -3,6 +3,7 @@
 
 NAME=np_nifalcon
 SRCS=./src/np_nifalcon.flext.cpp 
+CFLAGS=-DNIFALCON_FTD2XX
 #CFLAGS=-I/usr/include -I/usr/local/include
 #ifdef SHARED
 #	LIBS += -DLIBFTDI -lnifalcon_libftdi -lftdi

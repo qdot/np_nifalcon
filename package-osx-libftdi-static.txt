@@ -1,6 +1,6 @@
 NAME=np_nifalcon
 BUILDTYPE=multi
 SRCS=np_nifalcon.flext.cpp 
-CFLAGS = -I/usr/include -I/usr/local/include -I/usr/local/include/falcon
+CFLAGS = -I/usr/include -I/usr/local/include -I/usr/local/include/falcon -DNIFALCON_LIBFTDI
 LIBS += -lnifalcon_s -lnifalcon_comm_libftdi_s -lftdi_s -lusb_s -framework IOKit
 
