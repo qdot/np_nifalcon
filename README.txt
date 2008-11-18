@@ -51,9 +51,14 @@ Installation
 Platform Specifics Issues
 =========================
 
+-------------
+ALL PLATFORMS
+-------------
+
+- If you have problems with the external locking up or I/O stopping randomly, try using a powered USB hub between the falcon and your machine. This is a common issue with laptops (especially macbooks), which seem to have USB power issues with the falcon that cause this issue.
+
 -----
 Linux
 -----
 
-- No Max/MSP build is available for linux as Max/MSP is not available for linux
 - np_nifalcon requires either root access (i.e. running pd under sudo) or correct udev based USB permissions to run as non-root. If you're using a udev based system, check out the udev sample files in the linux directory of the libnifalcon source distribution (v1.0 beta 1 and later)
