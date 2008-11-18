@@ -48,8 +48,12 @@ class np_nifalcon:
  
 	public:
 	// constructor
-	np_nifalcon() : m_runThread(false), m_isInited(false), m_inRawMode(true), m_errorCount(0), m_ledState(0), m_homingMode(false)
+	np_nifalcon() : m_runThread(false), m_isInited(false), m_inRawMode(true), m_errorCount(0), m_ledState(0), m_homingMode(false), m_showIOError(false)
 	{
+#ifdef LINUX_HACK
+		m_falconDevice.setCleanupObjects(false);
+#endif LINUX_HACK
+		
 		m_falconDevice.setFalconComm<FalconCommLibFTDI>();
 		m_falconDevice.setFalconFirmware<FalconFirmwareNovintSDK>();
 		m_falconDevice.setFalconGrip<FalconGripFourButton>();
@@ -82,6 +86,7 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD_(0, "stop", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "raw", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "vector", nifalcon_anything);
+		FLEXT_ADDMETHOD_(0, "show_ioerror", nifalcon_anything);
 		FLEXT_ADDMETHOD(1, nifalcon_motor_raw);
 		FLEXT_ADDMETHOD(2, nifalcon_motor_vector);
 		FLEXT_ADDMETHOD(3, nifalcon_led);
@@ -89,10 +94,15 @@ class np_nifalcon:
 
 		post("Novint Falcon External, by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 	} 
-	 
+
+	virtual void Exit()
+	{
+		shutdown();
+		flext_base::Exit();
+	}
+	
 	virtual ~np_nifalcon()
 	{
-		m_falconDevice.close();
 	}
 	 
 protected:
@@ -100,6 +110,7 @@ protected:
 	bool m_inRawMode;
 	bool m_isInited;
 	bool m_runThread;
+	bool m_showIOError;
 	int m_errorCount;
 	int m_ledState;
 	double m_motorVectorForce[3];
@@ -107,6 +118,13 @@ protected:
 	bool m_homingMode;
 	ThrCond m_threadCond;
 	ThrMutex m_threadMutex;
+
+	void shutdown()
+	{
+		m_runThread = false;
+		m_threadCond.Wait();			
+		m_falconDevice.close();
+	}
 	
 	void nifalcon_post_error()
 	{
@@ -164,7 +182,7 @@ protected:
 			if(m_falconDevice.isFirmwareLoaded())
 			{
 				m_isInited = true;
-				post("np_nifalcon: Firmware already loaded, skipping...");
+				post("np_nifalcon: Firmware already loaded, no need to reload...");
 				return;
 			}
 			if(!m_falconDevice.setFirmwareFile(GetString(argv[0])))
@@ -185,7 +203,7 @@ protected:
 			if(m_falconDevice.isFirmwareLoaded())
 			{
 				m_isInited = true;
-				post("np_nifalcon: Firmware already loaded, skipping...");
+				post("np_nifalcon: Firmware already loaded, no need to reload...");
 				return;
 			}
 			for(int i = 0; i < 10; ++i)
@@ -216,11 +234,26 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "raw"))
 		{
+			post("np_nifalcon: Falcon force input now in raw mode");
 			m_inRawMode = true;
 		}
 		else if (!strcmp(msg->s_name, "vector"))
 		{
+			post("np_nifalcon: Falcon force input now in vector mode");
 			m_inRawMode = false;
+		}
+		else if (!strcmp(msg->s_name, "show_ioerror"))
+		{
+			if(!m_showIOError)
+			{
+				m_showIOError = true;
+				post("np_nifalcon: Now showing IO errors");
+			}
+			else
+			{
+				m_showIOError = false;
+				post("np_nifalcon: Now hiding IO errors");
+			}
 		}
 		else
 		{
@@ -269,7 +302,6 @@ protected:
 			
 			if(!m_inRawMode)
 			{
-				//double a[3] = {0.0, 0.0, 0.0};
 				m_falconDevice.setForce(m_motorVectorForce);
 			}
 			else
@@ -337,7 +369,7 @@ protected:
 			else
 			{
 				++m_errorCount;
-				//post("np_nifalcon: IO Loop Error %d : %d",m_errorCount, m_falconDevice.getErrorCode());
+				if(m_showIOError) post("np_nifalcon: IO Loop Error %d : %d", m_errorCount, m_falconDevice.getErrorCode());
 			}
             flext::ThrYield();
 		}
@@ -347,7 +379,7 @@ protected:
 	void nifalcon_motor_raw(int motor_1, int motor_2, int motor_3)
 	{
 		m_threadMutex.Lock();
-		if(!m_inRawMode) post("Falcon in vector force mode, raw input ignored");
+		if(!m_inRawMode) post("np_nifalcon: Falcon in vector force mode, raw input ignored");
 		m_motorRawForce[0] = motor_1;
 		m_motorRawForce[1] = motor_2;
 		m_motorRawForce[2] = motor_3;
@@ -358,7 +390,7 @@ protected:
 	void nifalcon_motor_vector(float x, float y, float z)
 	{
 		m_threadMutex.Lock();
-		if(m_inRawMode) post("Falcon in raw mode, vector force input ignored");
+		if(m_inRawMode) post("np_nifalcon: Falcon in raw mode, vector force input ignored");
 		m_motorVectorForce[0] = x;
 		m_motorVectorForce[1] = y;
 		m_motorVectorForce[2] = z;
