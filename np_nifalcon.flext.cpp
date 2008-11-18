@@ -104,7 +104,9 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External, by Nonpolynomial Labs (http://www.nonpolynomial.com)");
+		post("Novint Falcon External v1.0.1");
+		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
+		post("Updates at http://libnifalcon.sourceforge.net");
 	} 
 
 	virtual void Exit()
