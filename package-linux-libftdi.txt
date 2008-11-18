@@ -1,0 +1,6 @@
+NAME=np_nifalcon
+BUILDTYPE=multi
+SRCS=np_nifalcon.flext.cpp 
+CFLAGS = -I/usr/include -I/usr/local/include -I/usr/local/include/falcon -DLINUX_HACK
+LIBS += -lnifalcon -lnifalcon_comm_libftdi
+
