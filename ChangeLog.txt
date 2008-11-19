@@ -1,8 +1,12 @@
 np_nifalcon ChangeLog
 ===========================
 
+2008-11-18 Kyle Machulis <kyle@nonpolynomial.com>
+	* Release v1.0.2
+	* Fixed freeze on external destruction with no running thread
+	* Fixed raw force being ignored (i/o loop flag error)
 2008-11-17 Kyle Machulis <kyle@nonpolynomial.com>
-	* Release v1.1
+	* Release v1.0.1
 	* Fixed crash on shutdown with live thread
 	* Added hack to fix linux crash on destruction
 	* Fixed comm library selection and added package files to reflect
