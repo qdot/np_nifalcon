@@ -104,7 +104,7 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.0.1");
+		post("Novint Falcon External v1.0.2");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://libnifalcon.sourceforge.net");
 	} 
@@ -135,8 +135,11 @@ protected:
 
 	void shutdown()
 	{
-		m_runThread = false;
-		m_threadCond.Wait();			
+		if(m_runThread)
+		{
+			m_runThread = false;		
+			m_threadCond.Wait();
+		}
 		m_falconDevice.close();
 	}
 	
@@ -328,7 +331,7 @@ protected:
 			m_falconDevice.getFalconFirmware()->setLEDStatus(m_ledState);
 			m_threadMutex.Unlock();
 			
-			if(m_falconDevice.runIOLoop())
+			if(m_falconDevice.runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC)))
 			{
 				motor_changed = false;
 				coordinate_changed = false;
