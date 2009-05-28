@@ -18,7 +18,7 @@
 // include flext header
 #include <flext.h>
 
-//god damnit, cycling '74. 
+//god damnit, cycling '74.
 #ifdef PI
 #undef PI
 #endif
@@ -51,7 +51,7 @@ class np_nifalcon:
 {
 	// obligatory flext header (class name,base class name)
 	FLEXT_HEADER(np_nifalcon,flext_base)
- 
+
 	public:
 	// constructor
 	np_nifalcon() : m_runThread(false), m_isInited(false), m_inRawMode(true), m_errorCount(0), m_ledState(0), m_homingMode(false), m_showIOError(false)
@@ -104,21 +104,23 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.0.1");
+		post("Novint Falcon External v1.0.2");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://libnifalcon.sourceforge.net");
-	} 
+	}
 
 	virtual void Exit()
 	{
+		post("Exiting external");
 		shutdown();
 		flext_base::Exit();
 	}
-	
+
 	virtual ~np_nifalcon()
 	{
+		post("Destructing?");
 	}
-	 
+
 protected:
 	FalconDevice m_falconDevice;
 	bool m_inRawMode;
@@ -127,24 +129,28 @@ protected:
 	bool m_showIOError;
 	int m_errorCount;
 	int m_ledState;
-	double m_motorVectorForce[3];
-	int16_t m_motorRawForce[3];
+	boost::array<double,3> m_motorVectorForce;
+	boost::array<int,3> m_motorRawForce;
 	bool m_homingMode;
 	ThrCond m_threadCond;
 	ThrMutex m_threadMutex;
 
 	void shutdown()
 	{
-		m_runThread = false;
-		m_threadCond.Wait();			
+		if(m_runThread)
+		{
+			post("Shutting down IO thread");
+			m_runThread = false;
+			m_threadCond.Wait();
+		}
 		m_falconDevice.close();
 	}
-	
+
 	void nifalcon_post_error()
 	{
 		//post("np_nifalcon error: %d %s", mFalcon.falcon_status_code, nifalcon_get_error_string(&mFalcon));
 	}
-	
+
 	void nifalcon_anything(const t_symbol *msg,int argc,t_atom *argv)
 	{
 		if(!strcmp(msg->s_name, "open"))
@@ -172,11 +178,11 @@ protected:
 		}
 		else if(!strcmp(msg->s_name, "count"))
 		{
-			int8_t count;
+			unsigned int count;
 			if(!m_falconDevice.getDeviceCount(count))
 			{
 				post("np_nifalcon: Error while counting devices");
-			}					
+			}
 			post("np_nifalcon: Falcons Available: %d", count);
 		}
 		else if(!strcmp(msg->s_name, "stop"))
@@ -187,7 +193,7 @@ protected:
 				return;
 			}
 			m_runThread = false;
-			m_threadCond.Wait();			
+			m_threadCond.Wait();
 			post("Input thread stopped");
 			return;
 		}
@@ -203,7 +209,7 @@ protected:
 			{
 				post("np_nifalcon: Cannot find firmware file %s", GetString(argv[0]));
 				return;
-			}			
+			}
 			if(!m_falconDevice.loadFirmware(10, false))
 			{
 				post("np_nifalcon, Could not load firmware: %d");
@@ -222,13 +228,20 @@ protected:
 			}
 			for(int i = 0; i < 10; ++i)
 			{
-				if(m_falconDevice.getFalconFirmware()->loadFirmware(true, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
+				if(m_falconDevice.getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 				{
+					m_falconDevice.close();
+					if(!m_falconDevice.open(0))
+					{
+						post("Cannot open falcon - Error: %d", m_falconDevice.getErrorCode());
+						return;
+					}
+
 					m_isInited = true;
 					break;
 				}
 			}
-			if(m_isInited)			
+			if(m_isInited)
 				post("np_nifalcon: loading nvent firmware finished");
 			else
 				post("np_nifalcon: loading nvent firmware FAILED");
@@ -281,7 +294,7 @@ protected:
 		{
 			post("Thread already running");
 			return;
-		}		
+		}
 		if(!m_isInited)
 		{
 			post("Falcon must be initialized to start");
@@ -294,7 +307,7 @@ protected:
 		int16_t motor_state[3] = {0, 0, 0};
 		float coordinate_state[3] = {0.0, 0.0, 0.0};
 		uint8_t button_state = 0;
-		
+
 		t_atom motor_list[3];
 		for(i = 0; i < 3; ++i) SetInt(motor_list[i], 0);
 		t_atom coordinate_list[3];
@@ -306,14 +319,14 @@ protected:
 		bool coordinate_changed = false;
 
 		while(1)
-		{			
+		{
 			if(!m_runThread)
 			{
 				break;
 			}
 
 			m_threadMutex.Lock();
-			
+
 			if(!m_inRawMode)
 			{
 				m_falconDevice.setForce(m_motorVectorForce);
@@ -322,17 +335,17 @@ protected:
 			{
 				m_falconDevice.getFalconFirmware()->setForces(m_motorRawForce);
 			}
-			
+
 			m_falconDevice.getFalconFirmware()->setHomingMode(m_homingMode);
-			
+
 			m_falconDevice.getFalconFirmware()->setLEDStatus(m_ledState);
 			m_threadMutex.Unlock();
-			
+
 			if(m_falconDevice.runIOLoop())
 			{
 				motor_changed = false;
 				coordinate_changed = false;
-				
+
 				//Output encoder values
 				for(i = 0; i < 3; ++i)
 				{
@@ -341,10 +354,10 @@ protected:
 						motor_state[i] = m_falconDevice.getFalconFirmware()->getEncoderValues()[i];
 						SetInt(motor_list[i], motor_state[i]);
 						motor_changed = true;
-					}					
+					}
 				}
 				if(motor_changed) ToOutList(1, 3, motor_list);
-				
+
 				//Output kinematics values
 				for(i = 0; i < 3; ++i)
 				{
@@ -356,7 +369,7 @@ protected:
 					}
 				}
 				if(coordinate_changed) ToOutList(2, 3, coordinate_list);
-				
+
 				//Output digital values
 				buttons = m_falconDevice.getFalconGrip()->getDigitalInputs();
 				if(button_state != buttons)
@@ -371,7 +384,7 @@ protected:
 
 				//Output analog values
 				//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
-				
+
 				//Output homing values
 				if(m_falconDevice.getFalconFirmware()->isHomed() != homing_state)
 				{
@@ -398,9 +411,9 @@ protected:
 		m_motorRawForce[1] = motor_2;
 		m_motorRawForce[2] = motor_3;
 		m_threadMutex.Unlock();
-					
+
 	}
-	
+
 	void nifalcon_motor_vector(float x, float y, float z)
 	{
 		m_threadMutex.Lock();
@@ -410,26 +423,26 @@ protected:
 		m_motorVectorForce[2] = z;
 		m_threadMutex.Unlock();
 	}
-	
+
 	void nifalcon_led(int red, int green, int blue)
 	{
-		m_threadMutex.Lock();		
+		m_threadMutex.Lock();
 		if(red > 0) m_ledState |= FalconFirmware::RED_LED;
 		else m_ledState &= ~FalconFirmware::RED_LED;
 		if(green > 0) m_ledState |= FalconFirmware::GREEN_LED;
 		else m_ledState &= ~FalconFirmware::GREEN_LED;
 		if(blue > 0) m_ledState |= FalconFirmware::BLUE_LED;
 		else m_ledState &= ~FalconFirmware::BLUE_LED;
-		m_threadMutex.Unlock();				
+		m_threadMutex.Unlock();
 	}
-	
+
 	void nifalcon_homing_mode(long t)
 	{
 		m_threadMutex.Lock();
 		m_homingMode = (t > 0);
-		m_threadMutex.Unlock();	   		
+		m_threadMutex.Unlock();
 	}
-		
+
 private:
 	FLEXT_CALLBACK_A(nifalcon_anything)
 	FLEXT_CALLBACK_III(nifalcon_motor_raw)
