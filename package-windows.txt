@@ -2,11 +2,11 @@
 #when you run the build script
 
 NAME=np_nifalcon
-SRCS=./src/np_nifalcon.flext.cpp 
-CFLAGS=-DNIFALCON_FTD2XX
-#CFLAGS=-I/usr/include -I/usr/local/include
+SRCS=np_nifalcon.flext.cpp 
+CFLAGS += -DNIFALCON_FTD2XX
+CFLAGS += -I"%ProgramFiles%/boost/boost_1_35_0/"
 #ifdef SHARED
-#	LIBS += -DLIBFTDI -lnifalcon_libftdi -lftdi
+LIBS += -Lc:/MinGW/lib -lnifalcon_comm_ftd2xx -lnifalcon -lftd2xx
 #else
 #	LIBS += -DLIBFTDI -lnifalcon_libftdi_s -lftdi_s -lusb_s
 #endif
