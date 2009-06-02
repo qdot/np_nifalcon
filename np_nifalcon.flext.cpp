@@ -100,7 +100,7 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.0.3");
+		post("Novint Falcon External v1.0.3 - alpha");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://libnifalcon.sourceforge.net");
 	}
@@ -222,15 +222,17 @@ protected:
 			}
 			for(int i = 0; i < 10; ++i)
 			{
-				if(m_falconDevice.getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
+				if(!m_falconDevice.getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 				{
 					m_falconDevice.close();
 					if(!m_falconDevice.open(0))
-				{
+					{
 						post("Cannot open falcon - Error: %d", m_falconDevice.getErrorCode());
 						return;
 					}
-
+				}
+				else
+				{
 					m_isInited = true;
 					break;
 				}
