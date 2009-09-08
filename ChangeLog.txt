@@ -1,6 +1,9 @@
 np_nifalcon ChangeLog
 ===========================
 
+2009-09-07 Kyle Machulis <kyle@nonpolynomial.com>
+	* Release v1.1
+	* Updated external to work with libnifalcon v1.0
 2008-11-18 Kyle Machulis <kyle@nonpolynomial.com>
 	* Release v1.0.2
 	* Fixed freeze on external destruction with no running thread

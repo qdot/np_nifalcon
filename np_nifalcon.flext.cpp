@@ -1,11 +1,11 @@
 /*
  * Implementation file for Novint Falcon Max/Pd External
  *
- * Copyright (c) 2005-2008 Kyle Machulis/Nonpolynomial Labs <kyle@nonpolynomial.com>
+ * Copyright (c) 2005-2009 Kyle Machulis/Nonpolynomial Labs <kyle@nonpolynomial.com>
  *
  * More info on Nonpolynomial Labs @ http://www.nonpolynomial.com
  *
- * Sourceforge project @ http://www.sourceforge.net/projects/libnifalcon/
+ * Sourceforge project @ http://www.github.com/qdot/np_nifalcon
  *
  * Example code from flext tutorials. http://www.parasitaere-kapazitaeten.net/ext/flext/
  */
@@ -24,13 +24,6 @@
 #endif
 
 #include "falcon/core/FalconDevice.h"
-#if defined(NIFALCON_LIBFTDI)
-#include "falcon/comm/FalconCommLibFTDI.h"
-#elif defined(NIFALCON_LIBUSB)
-#include "falcon/comm/FalconCommLibUSB.h"
-#elif defined(NIFALCON_FTD2XX)
-#include "falcon/comm/FalconCommFTD2XX.h"
-#endif
 #include "falcon/grip/FalconGripFourButton.h"
 #include "falcon/kinematic/FalconKinematicStamper.h"
 #include "falcon/firmware/FalconFirmwareNovintSDK.h"
@@ -54,18 +47,16 @@ class np_nifalcon:
 
 	public:
 	// constructor
-	np_nifalcon() : m_runThread(false), m_isInited(false), m_inRawMode(true), m_errorCount(0), m_ledState(0), m_homingMode(false), m_showIOError(false)
+	np_nifalcon() :
+	m_runThread(false),
+		m_isInited(false),
+		m_inRawMode(true),
+		m_errorCount(0),
+		m_ledState(0),
+		m_homingMode(false),
+		m_showIOError(false),
+		m_falconDevice(NULL)
 	{
-#if defined(NIFALCON_LIBFTDI)
-		m_falconDevice.setFalconComm<FalconCommLibFTDI>();
-#elif defined(NIFALCON_LIBUSB)
-		m_falconDevice.setFalconComm<FalconCommLibUSB>();
-#elif defined(NIFALCON_FTD2XX)
-		m_falconDevice.setFalconComm<FalconCommFTD2XX>();
-#endif
-		m_falconDevice.setFalconFirmware<FalconFirmwareNovintSDK>();
-		m_falconDevice.setFalconGrip<FalconGripFourButton>();
-		m_falconDevice.setFalconKinematic<FalconKinematicStamper>();
 
 		for(int i = 0; i < 3; ++i)
 		{
@@ -100,9 +91,9 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.0.3 - alpha");
+		post("Novint Falcon External v1.1");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
-		post("Updates at http://libnifalcon.sourceforge.net");
+		post("Updates at http://www.github.com/qdot/np_nifalcon");
 	}
 
 	virtual void Exit()
@@ -116,7 +107,7 @@ class np_nifalcon:
 	}
 
 protected:
-	FalconDevice m_falconDevice;
+	FalconDevice* m_falconDevice;
 	bool m_inRawMode;
 	bool m_isInited;
 	bool m_runThread;
@@ -131,13 +122,15 @@ protected:
 
 	void shutdown()
 	{
+
 		if(m_runThread)
 		{
 			post("Shutting down IO thread");
 			m_runThread = false;
 			m_threadCond.Wait();
 		}
-		m_falconDevice.close();
+		if(m_falconDevice)
+			m_falconDevice->close();
 	}
 
 	void nifalcon_post_error()
@@ -149,31 +142,61 @@ protected:
 	{
 		if(!strcmp(msg->s_name, "open"))
 		{
+			m_falconDevice = new FalconDevice();
+			m_falconDevice->setFalconFirmware<FalconFirmwareNovintSDK>();
+			m_falconDevice->setFalconGrip<FalconGripFourButton>();
+			m_falconDevice->setFalconKinematic<FalconKinematicStamper>();
+
 			if(argc == 1)
 			{
 				post("np_nifalcon: Opening falcon %d", GetInt(argv[0]));
-				if(!m_falconDevice.open(GetInt(argv[0])))
+				if(!m_falconDevice->open(GetInt(argv[0])))
 				{
-					post("Cannot open falcon - Error: %d", m_falconDevice.getErrorCode());
+					post("Cannot open falcon - Error: %d", m_falconDevice->getErrorCode());
+					delete m_falconDevice;
+					m_falconDevice = NULL;
 					return;
 				}
 			}
 			else
 			{
+
 				post("np_nifalcon: Opening first falcon found");
-				if(!m_falconDevice.open(0))
+				if(!m_falconDevice->open(0))
 				{
-					post("Cannot open falcon - Error: %d", m_falconDevice.getErrorCode());
+					post("Cannot open falcon - Error: %d", m_falconDevice->getErrorCode());
+					delete m_falconDevice;
+					m_falconDevice = NULL;
 					return;
 				}
 			}
 			post("np_nifalcon: Opened");
 			return;
 		}
+		else if (!strcmp(msg->s_name, "close"))
+		{
+			if(m_falconDevice == NULL)
+			{
+				post("np_nifalcon: Falcon not open");
+			}
+			m_isInited = false;
+			if(m_runThread)
+			{
+				m_runThread = false;
+				m_threadCond.Wait();
+			}
+			m_falconDevice->close();
+			delete m_falconDevice;
+			m_falconDevice = NULL;
+			post("np_nifalcon: Falcon closed");
+			return;
+		}
+
 		else if(!strcmp(msg->s_name, "count"))
 		{
+			FalconDevice count_device;
 			unsigned int count;
-			if(!m_falconDevice.getDeviceCount(count))
+			if(!count_device.getDeviceCount(count))
 			{
 				post("np_nifalcon: Error while counting devices");
 			}
@@ -181,6 +204,10 @@ protected:
 		}
 		else if(!strcmp(msg->s_name, "stop"))
 		{
+			if(m_falconDevice == NULL)
+			{
+				post("np_nifalcon: Falcon not open");
+			}
 			if(!m_runThread)
 			{
 				post("No thread running");
@@ -193,18 +220,22 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "init"))
 		{
-			if(m_falconDevice.isFirmwareLoaded())
+			if(m_falconDevice == NULL)
+			{
+				post("np_nifalcon: Falcon not open");
+			}
+			if(m_falconDevice->isFirmwareLoaded())
 			{
 				m_isInited = true;
 				post("np_nifalcon: Firmware already loaded, no need to reload...");
 				return;
 			}
-			if(!m_falconDevice.setFirmwareFile(GetString(argv[0])))
+			if(!m_falconDevice->setFirmwareFile(GetString(argv[0])))
 			{
 				post("np_nifalcon: Cannot find firmware file %s", GetString(argv[0]));
 				return;
 			}
-			if(!m_falconDevice.loadFirmware(10, false))
+			if(!m_falconDevice->loadFirmware(10, false))
 			{
 				post("np_nifalcon, Could not load firmware: %d");
 				return;
@@ -214,7 +245,11 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "nvent_firmware"))
 		{
-			if(m_falconDevice.isFirmwareLoaded())
+			if(m_falconDevice == NULL)
+			{
+				post("np_nifalcon: Falcon not open");
+			}
+			if(m_falconDevice->isFirmwareLoaded())
 			{
 				m_isInited = true;
 				post("np_nifalcon: Firmware already loaded, no need to reload...");
@@ -222,12 +257,12 @@ protected:
 			}
 			for(int i = 0; i < 10; ++i)
 			{
-				if(!m_falconDevice.getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
+				if(!m_falconDevice->getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 				{
-					m_falconDevice.close();
-					if(!m_falconDevice.open(0))
+					m_falconDevice->close();
+					if(!m_falconDevice->open(0))
 					{
-						post("Cannot open falcon - Error: %d", m_falconDevice.getErrorCode());
+						post("Cannot open falcon - Error: %d", m_falconDevice->getErrorCode());
 						return;
 					}
 				}
@@ -243,18 +278,6 @@ protected:
 				post("np_nifalcon: loading nvent firmware FAILED");
 		}
 
-		else if (!strcmp(msg->s_name, "close"))
-		{
-			m_isInited = false;
-			if(m_runThread)
-			{
-				m_runThread = false;
-				m_threadCond.Wait();
-			}
-			m_falconDevice.close();
-			post("np_nifalcon: Falcon closed");
-			return;
-		}
 		else if (!strcmp(msg->s_name, "raw"))
 		{
 			post("np_nifalcon: Falcon force input now in raw mode");
@@ -286,6 +309,10 @@ protected:
 
 	void nifalcon_update()
 	{
+		if(m_falconDevice == NULL)
+		{
+			post("np_nifalcon: Falcon not open");
+		}
 		if(m_runThread)
 		{
 			post("Thread already running");
@@ -325,19 +352,19 @@ protected:
 
 			if(!m_inRawMode)
 			{
-				m_falconDevice.setForce(m_motorVectorForce);
+				m_falconDevice->setForce(m_motorVectorForce);
 			}
 			else
 			{
-				m_falconDevice.getFalconFirmware()->setForces(m_motorRawForce);
+				m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
 			}
 
-			m_falconDevice.getFalconFirmware()->setHomingMode(m_homingMode);
+			m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
 
-			m_falconDevice.getFalconFirmware()->setLEDStatus(m_ledState);
+			m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
 			m_threadMutex.Unlock();
 
-			if(m_falconDevice.runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC)))
+			if(m_falconDevice->runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC)))
 			{
 				motor_changed = false;
 				coordinate_changed = false;
@@ -345,9 +372,9 @@ protected:
 				//Output encoder values
 				for(i = 0; i < 3; ++i)
 				{
-					if(motor_state[i] != m_falconDevice.getFalconFirmware()->getEncoderValues()[i])
+					if(motor_state[i] != m_falconDevice->getFalconFirmware()->getEncoderValues()[i])
 					{
-						motor_state[i] = m_falconDevice.getFalconFirmware()->getEncoderValues()[i];
+						motor_state[i] = m_falconDevice->getFalconFirmware()->getEncoderValues()[i];
 						SetInt(motor_list[i], motor_state[i]);
 						motor_changed = true;
 					}
@@ -357,9 +384,9 @@ protected:
 				//Output kinematics values
 				for(i = 0; i < 3; ++i)
 				{
-					if(coordinate_state[i] != m_falconDevice.getPosition()[i])
+					if(coordinate_state[i] != m_falconDevice->getPosition()[i])
 					{
-						coordinate_state[i] = m_falconDevice.getPosition()[i];
+						coordinate_state[i] = m_falconDevice->getPosition()[i];
 						SetFloat(coordinate_list[i], coordinate_state[i]);
 						coordinate_changed = true;
 					}
@@ -367,7 +394,7 @@ protected:
 				if(coordinate_changed) ToOutList(2, 3, coordinate_list);
 
 				//Output digital values
-				buttons = m_falconDevice.getFalconGrip()->getDigitalInputs();
+				buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
 				if(button_state != buttons)
 				{
 					for(i = 0; i < 4; ++i)
@@ -382,9 +409,9 @@ protected:
 				//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
 
 				//Output homing values
-				if(m_falconDevice.getFalconFirmware()->isHomed() != homing_state)
+				if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
 				{
-					homing_state = m_falconDevice.getFalconFirmware()->isHomed();
+					homing_state = m_falconDevice->getFalconFirmware()->isHomed();
 					ToOutInt(5, homing_state);
 				}
 				ToOutBang(0);
@@ -392,7 +419,7 @@ protected:
 			else
 			{
 				++m_errorCount;
-				if(m_showIOError) post("np_nifalcon: IO Loop Error %d : %d", m_errorCount, m_falconDevice.getErrorCode());
+				if(m_showIOError) post("np_nifalcon: IO Loop Error %d : %d", m_errorCount, m_falconDevice->getErrorCode());
 			}
             flext::ThrYield();
 		}
