@@ -45,21 +45,47 @@ class np_nifalcon:
 	// obligatory flext header (class name,base class name)
 	FLEXT_HEADER(np_nifalcon,flext_base)
 
+	class ScopedMutex
+	{
+		ScopedMutex() {}
+		
 	public:
+		ScopedMutex(ThrMutex& tm)
+		{
+			m = &tm;
+			m->Lock();
+		}
+		
+		~ScopedMutex()
+		{
+			m->Unlock();
+		}
+	private:
+		ThrMutex* m;
+	};
+
+public:
 	// constructor
 	np_nifalcon() :
-	m_runThread(false),
+		m_runThread(false),
 		m_isInited(false),
 		m_inRawMode(true),
 		m_errorCount(0),
 		m_ledState(0),
 		m_homingMode(false),
 		m_showIOError(false),
-		m_falconDevice(NULL)
+		m_hasUpdated(false),
+		m_alwaysOutput(false),
+		m_falconDevice(new FalconDevice()),
+		motor_changed(false),
+		coordinate_changed(false),
+		homing_state(false)
 	{
-
+		button_state = 0;
 		for(int i = 0; i < 3; ++i)
 		{
+			motor_state[i] = 0;
+			coordinate_state[i] = 0.0;
 			m_motorVectorForce[i] = 0;
 			m_motorRawForce[i] = 0;
 		}
@@ -78,11 +104,13 @@ class np_nifalcon:
 
 		FLEXT_ADDMETHOD_(0, "start", nifalcon_update);
 		FLEXT_ADDMETHOD_(0, "open", nifalcon_anything);
+		FLEXT_ADDMETHOD_(0, "update", nifalcon_update_loop);
+		FLEXT_ADDMETHOD_(0, "output", nifalcon_output);
 		FLEXT_ADDMETHOD_(0, "count", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "init", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "nvent_firmware", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "close", nifalcon_anything);
-		FLEXT_ADDMETHOD_(0, "stop", nifalcon_anything);
+		FLEXT_ADDMETHOD_(0, "stop", nifalcon_stop);
 		FLEXT_ADDMETHOD_(0, "raw", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "vector", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "show_ioerror", nifalcon_anything);
@@ -91,9 +119,14 @@ class np_nifalcon:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.1");
+		post("Novint Falcon External v1.3");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://www.github.com/qdot/np_nifalcon");
+
+
+		m_falconDevice->setFalconFirmware<FalconFirmwareNovintSDK>();
+		m_falconDevice->setFalconGrip<FalconGripFourButton>();
+		m_falconDevice->setFalconKinematic<FalconKinematicStamper>();
 	}
 
 	virtual void Exit()
@@ -104,10 +137,11 @@ class np_nifalcon:
 
 	virtual ~np_nifalcon()
 	{
+		m_threadMutex.Unlock();
 	}
 
 protected:
-	FalconDevice* m_falconDevice;
+	boost::shared_ptr<FalconDevice> m_falconDevice;
 	bool m_inRawMode;
 	bool m_isInited;
 	bool m_runThread;
@@ -117,12 +151,22 @@ protected:
 	boost::array<double,3> m_motorVectorForce;
 	boost::array<int,3> m_motorRawForce;
 	bool m_homingMode;
+	bool m_hasUpdated;
+	bool m_alwaysOutput;
 	ThrCond m_threadCond;
 	ThrMutex m_threadMutex;
+	t_atom motor_list[3];
+	t_atom coordinate_list[3];
+	t_atom button_list[4];
+	bool motor_changed;
+	bool coordinate_changed;
+	bool homing_state;
+	int16_t motor_state[3];
+	float coordinate_state[3];
+	uint8_t button_state;
 
 	void shutdown()
 	{
-
 		if(m_runThread)
 		{
 			post("Shutting down IO thread");
@@ -140,21 +184,20 @@ protected:
 
 	void nifalcon_anything(const t_symbol *msg,int argc,t_atom *argv)
 	{
+		ScopedMutex s(m_threadMutex);
 		if(!strcmp(msg->s_name, "open"))
 		{
-			m_falconDevice = new FalconDevice();
-			m_falconDevice->setFalconFirmware<FalconFirmwareNovintSDK>();
-			m_falconDevice->setFalconGrip<FalconGripFourButton>();
-			m_falconDevice->setFalconKinematic<FalconKinematicStamper>();
-
+			if(m_falconDevice->isOpen())
+			{
+				post("np_nifalcon: Falcon already open", GetInt(argv[0]));
+				return;
+			}
 			if(argc == 1)
 			{
 				post("np_nifalcon: Opening falcon %d", GetInt(argv[0]));
 				if(!m_falconDevice->open(GetInt(argv[0])))
 				{
 					post("Cannot open falcon - Error: %d", m_falconDevice->getErrorCode());
-					delete m_falconDevice;
-					m_falconDevice = NULL;
 					return;
 				}
 			}
@@ -165,8 +208,6 @@ protected:
 				if(!m_falconDevice->open(0))
 				{
 					post("Cannot open falcon - Error: %d", m_falconDevice->getErrorCode());
-					delete m_falconDevice;
-					m_falconDevice = NULL;
 					return;
 				}
 			}
@@ -175,7 +216,7 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "close"))
 		{
-			if(m_falconDevice == NULL)
+			if(!m_falconDevice->isOpen())
 			{
 				post("np_nifalcon: Falcon not open");
 			}
@@ -186,8 +227,6 @@ protected:
 				m_threadCond.Wait();
 			}
 			m_falconDevice->close();
-			delete m_falconDevice;
-			m_falconDevice = NULL;
 			post("np_nifalcon: Falcon closed");
 			return;
 		}
@@ -204,23 +243,10 @@ protected:
 		}
 		else if(!strcmp(msg->s_name, "stop"))
 		{
-			if(m_falconDevice == NULL)
-			{
-				post("np_nifalcon: Falcon not open");
-			}
-			if(!m_runThread)
-			{
-				post("No thread running");
-				return;
-			}
-			m_runThread = false;
-			m_threadCond.Wait();
-			post("Input thread stopped");
-			return;
 		}
 		else if (!strcmp(msg->s_name, "init"))
 		{
-			if(m_falconDevice == NULL)
+			if(!m_falconDevice->isOpen())
 			{
 				post("np_nifalcon: Falcon not open");
 			}
@@ -245,7 +271,7 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "nvent_firmware"))
 		{
-			if(m_falconDevice == NULL)
+			if(m_falconDevice->isOpen())
 			{
 				post("np_nifalcon: Falcon not open");
 			}
@@ -288,6 +314,15 @@ protected:
 			post("np_nifalcon: Falcon force input now in vector mode");
 			m_inRawMode = false;
 		}
+		else if (!strcmp(msg->s_name, "update"))
+		{
+			if(!m_falconDevice->isOpen())
+			{
+				post("np_nifalcon: Falcon not open");
+				return;
+			}
+			nifalcon_update_loop();
+		}
 		else if (!strcmp(msg->s_name, "show_ioerror"))
 		{
 			if(!m_showIOError)
@@ -307,9 +342,124 @@ protected:
 		}
 	}
 
+	void nifalcon_stop()
+	{
+		if(!m_falconDevice->isOpen())
+		{
+			post("np_nifalcon: Falcon not open");
+		}
+		if(!m_runThread)
+		{
+			post("No thread running");
+			return;
+		}
+		m_runThread = false;
+		post("Waiting for thread stop");
+		m_threadCond.Wait();
+		post("Input thread stopped");
+		return;
+	}
+	
+	void nifalcon_update_loop()
+	{
+
+		if(m_falconDevice->runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC)))
+		{
+			int i = 0, buttons = 0;
+			//t_atom analog_list[];
+			for(i = 0; i < 3; ++i) SetInt(motor_list[i], 0);
+			
+			for(i = 0; i < 3; ++i) SetFloat(coordinate_list[i], 0);
+			
+			for(i = 0; i < 4; ++i) SetInt(button_list[i], 0);
+
+			motor_changed = false;
+			coordinate_changed = false;
+			m_hasUpdated = true;
+			//Output encoder values
+			for(i = 0; i < 3; ++i)
+			{
+				if(motor_state[i] != m_falconDevice->getFalconFirmware()->getEncoderValues()[i])
+				{
+					motor_state[i] = m_falconDevice->getFalconFirmware()->getEncoderValues()[i];
+					SetInt(motor_list[i], motor_state[i]);
+					motor_changed = true;
+				}
+			}
+			if(motor_changed && m_alwaysOutput) ToOutList(1, 3, motor_list);
+
+			//Output kinematics values
+			for(i = 0; i < 3; ++i)
+			{
+				if(coordinate_state[i] != m_falconDevice->getPosition()[i])
+				{
+					coordinate_state[i] = m_falconDevice->getPosition()[i];
+					SetFloat(coordinate_list[i], coordinate_state[i]);
+					coordinate_changed = true;
+				}
+			}
+			if(coordinate_changed && m_alwaysOutput) ToOutList(2, 3, coordinate_list);
+
+			//Output digital values
+			buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
+			if(button_state != buttons)
+			{
+				for(i = 0; i < 4; ++i)
+				{
+					SetInt(button_list[i], buttons & (1 << i));
+				}
+				button_state = buttons;
+				if(m_alwaysOutput) ToOutList(3, 4, button_list);
+			}
+
+			//Output analog values
+			//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
+
+			//Output homing values
+			if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
+			{
+				homing_state = m_falconDevice->getFalconFirmware()->isHomed();
+				if(m_alwaysOutput) ToOutInt(5, homing_state);
+			}
+			if(m_alwaysOutput) ToOutBang(0);
+
+			//Now that we're done parsing what we got back, set the new internal values
+			if(!m_inRawMode)
+			{
+				m_falconDevice->setForce(m_motorVectorForce);
+			}
+			else
+			{
+				m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
+			}
+				
+			m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
+				
+			m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
+		}
+		else
+		{
+			usleep(500);
+			++m_errorCount;
+			if(m_showIOError) post("np_nifalcon: IO Loop Error %d : %d", m_errorCount, m_falconDevice->getErrorCode());
+		}
+	}
+
+	void nifalcon_output()
+	{
+		if(!m_hasUpdated) return;
+		ScopedMutex s(m_threadMutex);
+		if(motor_changed) ToOutList(1, 3, motor_list);
+		if(coordinate_changed) ToOutList(2, 3, coordinate_list);
+		ToOutList(3, 4, button_list);
+		ToOutInt(5, homing_state);
+		ToOutBang(0);
+		m_hasUpdated = false;
+	}
+	
 	void nifalcon_update()
 	{
-		if(m_falconDevice == NULL)
+		if(!m_falconDevice->isOpen())				
 		{
 			post("np_nifalcon: Falcon not open");
 		}
@@ -325,149 +475,63 @@ protected:
 		}
 		m_runThread = true;
 
-		int i = 0, buttons = 0;
-		bool homing_state = false;
-		int16_t motor_state[3] = {0, 0, 0};
-		float coordinate_state[3] = {0.0, 0.0, 0.0};
-		uint8_t button_state = 0;
-
-		t_atom motor_list[3];
-		for(i = 0; i < 3; ++i) SetInt(motor_list[i], 0);
-		t_atom coordinate_list[3];
-		for(i = 0; i < 3; ++i) SetFloat(coordinate_list[i], 0);
-		t_atom button_list[4];
-		for(i = 0; i < 4; ++i) SetInt(button_list[i], 0);
-		//t_atom analog_list[];
-		bool motor_changed = false;
-		bool coordinate_changed = false;
-
-		while(1)
+		while(m_runThread)
 		{
-			if(!m_runThread)
-			{
-				break;
-			}
-
-			m_threadMutex.Lock();
-
-			if(!m_inRawMode)
-			{
-				m_falconDevice->setForce(m_motorVectorForce);
-			}
-			else
-			{
-				m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
-			}
-
-			m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
-
-			m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
-			m_threadMutex.Unlock();
-
-			if(m_falconDevice->runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC)))
-			{
-				motor_changed = false;
-				coordinate_changed = false;
-
-				//Output encoder values
-				for(i = 0; i < 3; ++i)
-				{
-					if(motor_state[i] != m_falconDevice->getFalconFirmware()->getEncoderValues()[i])
-					{
-						motor_state[i] = m_falconDevice->getFalconFirmware()->getEncoderValues()[i];
-						SetInt(motor_list[i], motor_state[i]);
-						motor_changed = true;
-					}
-				}
-				if(motor_changed) ToOutList(1, 3, motor_list);
-
-				//Output kinematics values
-				for(i = 0; i < 3; ++i)
-				{
-					if(coordinate_state[i] != m_falconDevice->getPosition()[i])
-					{
-						coordinate_state[i] = m_falconDevice->getPosition()[i];
-						SetFloat(coordinate_list[i], coordinate_state[i]);
-						coordinate_changed = true;
-					}
-				}
-				if(coordinate_changed) ToOutList(2, 3, coordinate_list);
-
-				//Output digital values
-				buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
-				if(button_state != buttons)
-				{
-					for(i = 0; i < 4; ++i)
-					{
-						SetInt(button_list[i], buttons & (1 << i));
-					}
-					button_state = buttons;
-					ToOutList(3, 4, button_list);
-				}
-
-				//Output analog values
-				//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
-
-				//Output homing values
-				if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
-				{
-					homing_state = m_falconDevice->getFalconFirmware()->isHomed();
-					ToOutInt(5, homing_state);
-				}
-				ToOutBang(0);
-			}
-			else
-			{
-				++m_errorCount;
-				if(m_showIOError) post("np_nifalcon: IO Loop Error %d : %d", m_errorCount, m_falconDevice->getErrorCode());
-			}
-            flext::ThrYield();
+			ScopedMutex m(m_threadMutex);
+			nifalcon_update_loop();
+			m_threadCond.Signal();
 		}
-		m_threadCond.Signal();
 	}
-
+	
 	void nifalcon_motor_raw(int motor_1, int motor_2, int motor_3)
 	{
-		m_threadMutex.Lock();
-		if(!m_inRawMode) post("np_nifalcon: Falcon in vector force mode, raw input ignored");
+		ScopedMutex s(m_threadMutex);
+		if(!m_inRawMode)
+		{
+			post("np_nifalcon: Falcon in vector force mode, raw input ignored");
+			return;
+		}
 		m_motorRawForce[0] = motor_1;
 		m_motorRawForce[1] = motor_2;
 		m_motorRawForce[2] = motor_3;
-		m_threadMutex.Unlock();
 
 	}
 
 	void nifalcon_motor_vector(float x, float y, float z)
 	{
-		m_threadMutex.Lock();
-		if(m_inRawMode) post("np_nifalcon: Falcon in raw mode, vector force input ignored");
+		ScopedMutex s(m_threadMutex);
+		if(m_inRawMode)
+		{
+			post("np_nifalcon: Falcon in raw mode, vector force input ignored");
+			return;
+		}
 		m_motorVectorForce[0] = x;
 		m_motorVectorForce[1] = y;
 		m_motorVectorForce[2] = z;
-		m_threadMutex.Unlock();
 	}
 
 	void nifalcon_led(int red, int green, int blue)
 	{
-		m_threadMutex.Lock();
+		ScopedMutex s(m_threadMutex);
 		if(red > 0) m_ledState |= FalconFirmware::RED_LED;
 		else m_ledState &= ~FalconFirmware::RED_LED;
 		if(green > 0) m_ledState |= FalconFirmware::GREEN_LED;
 		else m_ledState &= ~FalconFirmware::GREEN_LED;
 		if(blue > 0) m_ledState |= FalconFirmware::BLUE_LED;
 		else m_ledState &= ~FalconFirmware::BLUE_LED;
-		m_threadMutex.Unlock();
 	}
 
 	void nifalcon_homing_mode(long t)
 	{
-		m_threadMutex.Lock();
+		ScopedMutex s(m_threadMutex);
 		m_homingMode = (t > 0);
-		m_threadMutex.Unlock();
 	}
 
 private:
 	FLEXT_CALLBACK_A(nifalcon_anything)
+	FLEXT_CALLBACK(nifalcon_stop)
+	FLEXT_CALLBACK(nifalcon_update_loop)
+	FLEXT_CALLBACK(nifalcon_output)
 	FLEXT_CALLBACK_III(nifalcon_motor_raw)
 	FLEXT_CALLBACK_FFF(nifalcon_motor_vector)
 	FLEXT_CALLBACK_III(nifalcon_led)
