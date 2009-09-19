@@ -84,8 +84,6 @@ public:
 		button_state = 0;
 		for(int i = 0; i < 3; ++i)
 		{
-			motor_state[i] = 0;
-			coordinate_state[i] = 0.0;
 			m_motorVectorForce[i] = 0;
 			m_motorRawForce[i] = 0;
 		}
@@ -119,10 +117,10 @@ public:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.3");
+		post("Novint Falcon External v1.5");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://www.github.com/qdot/np_nifalcon");
-
+		post("Compiled on " __DATE__ " " __TIME__);
 
 		m_falconDevice->setFalconFirmware<FalconFirmwareNovintSDK>();
 		m_falconDevice->setFalconGrip<FalconGripFourButton>();
@@ -161,8 +159,6 @@ protected:
 	bool motor_changed;
 	bool coordinate_changed;
 	bool homing_state;
-	int16_t motor_state[3];
-	float coordinate_state[3];
 	uint8_t button_state;
 
 	void shutdown()
@@ -367,36 +363,24 @@ protected:
 		{
 			int i = 0, buttons = 0;
 			//t_atom analog_list[];
-			for(i = 0; i < 3; ++i) SetInt(motor_list[i], 0);
-			
-			for(i = 0; i < 3; ++i) SetFloat(coordinate_list[i], 0);
-			
-			for(i = 0; i < 4; ++i) SetInt(button_list[i], 0);
-
 			motor_changed = false;
 			coordinate_changed = false;
 			m_hasUpdated = true;
 			//Output encoder values
 			for(i = 0; i < 3; ++i)
 			{
-				if(motor_state[i] != m_falconDevice->getFalconFirmware()->getEncoderValues()[i])
-				{
-					motor_state[i] = m_falconDevice->getFalconFirmware()->getEncoderValues()[i];
-					SetInt(motor_list[i], motor_state[i]);
-					motor_changed = true;
-				}
+				if(GetInt(motor_list[i]) == (m_falconDevice->getFalconFirmware()->getEncoderValues())[i]) continue;
+				motor_changed = true;
+				SetInt(motor_list[i], m_falconDevice->getFalconFirmware()->getEncoderValues()[i]);
 			}
 			if(motor_changed && m_alwaysOutput) ToOutList(1, 3, motor_list);
 
 			//Output kinematics values
 			for(i = 0; i < 3; ++i)
 			{
-				if(coordinate_state[i] != m_falconDevice->getPosition()[i])
-				{
-					coordinate_state[i] = m_falconDevice->getPosition()[i];
-					SetFloat(coordinate_list[i], coordinate_state[i]);
-					coordinate_changed = true;
-				}
+				if(GetFloat(coordinate_list[i]) == m_falconDevice->getPosition()[i]) continue;
+				coordinate_changed = true;
+				SetFloat(coordinate_list[i], m_falconDevice->getPosition()[i]);
 			}
 			if(coordinate_changed && m_alwaysOutput) ToOutList(2, 3, coordinate_list);
 
