@@ -1,6 +1,11 @@
 np_nifalcon ChangeLog
 ===========================
 
+2009-09-20 Kyle Machulis <kyle@nonpolynomial.com>
+	* Release v1.5
+	* Rewrote most of the external, many fixes to stability
+	* Added manual and auto polling options
+	* Added Max5 help file
 2009-09-07 Kyle Machulis <kyle@nonpolynomial.com>
 	* Release v1.1
 	* Updated external to work with libnifalcon v1.0
@@ -24,6 +29,6 @@ np_nifalcon ChangeLog
 	* Release v0.2
 	* Added homing bit input
 	* Fixed flext package file to not use _s hack for static libs
-	* Updated Pd External Help File	
+	* Updated Pd External Help File
 2008-04-05 Kyle Machulis <kyle@nonpolynomial.com>
 	* First release of np_nifalcon PD/Max external

@@ -1,6 +1,6 @@
-==================================
-np_nifalcon Max/MSP External
-==================================
+===================================
+np_nifalcon Max/MSP and Pd External
+===================================
 
 by Kyle Machulis <kyle@nonpolynomial.com>
 Nonpolynomial Labs - http://www.nonpolynomial.com
@@ -16,21 +16,13 @@ Description
 
 np_nifalcon is an external for either Max/MSP or Puredata to control the Novint Falcon. It is based on libnifalcon:
 
-http://sourceforge.net/projects/libnifalcon
+http://libnifalcon.nonpolynomial.com
 
 Portability of source between Max and Pd is available thanks to flext
 
 Max: http://www.cycling74.com
 Pd: http://www.puredata.info
 Flext: http://www.parasitaere-kapazitaeten.net/ext/flext/
-
-=========
-Licensing
-=========
-
-libnifalcon is covered under the BSD License.
-
-flext and np_nifalcon source code are covered under the GPL v2 License.
 
 ===========================
 Novint Falcon Information
@@ -45,20 +37,78 @@ Installation
 ============
 
 - Put the .mxo(Mac)/.mxe(Windows) or .pd_[platform] file in a directory that Max/Pd will search for externals (Max: Options -> File Preferences -> Other Folders, Pd: Options -> Paths)
-- Max: Put the .help file in the max-help directory of your Max/MSP installation
+- Max: Put the .help (Max4) or .maxhelp (Max5) file in the max-help directory of your Max/MSP installation
 
 =========================
 Platform Specifics Issues
 =========================
 
--------------
-ALL PLATFORMS
--------------
+-------
+Windows
+-------
 
-- If you have problems with the external locking up or I/O stopping randomly, try using a powered USB hub between the falcon and your machine. This is a common issue with laptops (especially macbooks), which seem to have USB power issues with the falcon that cause this issue.
+- Make sure the falcon is directly connected to your machine, do not go through a USB hub.
+
+----
+OS X
+----
+
+- Use a powered USB hub between the falcon and your machine.
 
 -----
 Linux
 -----
 
+- Use a powered USB hub between the falcon and your machine.
 - np_nifalcon requires either root access (i.e. running pd under sudo) or correct udev based USB permissions to run as non-root. If you're using a udev based system, check out the udev sample files in the linux directory of the libnifalcon source distribution (v1.0 beta 1 and later)
+
+=========
+Licensing
+=========
+
+np_nifalcon is covered under the BSD License, but since it's based on flext, it's GPL. Damn you, viral licensing.
+
+Copyright
+-------------------
+
+np_nifalcon, Copyright 2007-2009 Kyle Machulis/Nonpolynomial Labs
+
+-------------------
+
+libnifalcon is covered under the BSD License.
+
+Copyright
+-------------------
+
+libnifalcon, Copyright 2007-2009 Kyle Machulis/Nonpolynomial Labs
+
+libnifalcon Kinematics Core, Copyright 2007-2008 Kevin Ouellet, 2009 Alastair Barrow, 2007-2009 Kyle Machulis
+
+-------------------
+
+flext source code are covered under the GPL v2 License. np_nifalcon is BSD, but since it's based on flext, it's GPL.
+
+Copyright
+-------------------
+
+flext - C++ layer for Max/MSP and pd (pure data) externals
+Copyright (C) 2001-2005 Thomas Grill
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+ 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+
+In the official flext distribution, the GNU General Public License is
+in the file gpl.txt
+
+--------------------

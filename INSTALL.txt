@@ -31,7 +31,7 @@ from the nplabs external directory.
 Binaries
 ========
 
-All windows externals are build using VS2003 (for compatibility sake). Mac is build on OS 10.5.WhateverIsNewest, gcc 4. Linux is test built on an ubuntu machine, but binaries are not distributed due to platform differences. If you use linux and pd and actually manage to get things done, you are probably able to build this yourself anyways. :)
+All windows externals are build using VS2008 (for compatibility sake). Mac is build on OS 10.5.WhateverIsNewest, gcc 4. Linux is test built on an ubuntu machine, but binaries are not distributed due to platform differences. If you use linux and pd and actually manage to get things done, you are probably able to build this yourself anyways. :)
 
 =============
 Test Machines
