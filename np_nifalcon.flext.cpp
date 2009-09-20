@@ -136,6 +136,7 @@ public:
 	virtual void Exit()
 	{
 		m_alwaysOutput = false;		
+		if(m_runThread) nifalcon_stop();
 		m_falconDevice->close();
 		flext_base::Exit();
 	}
@@ -143,6 +144,7 @@ public:
 	virtual ~np_nifalcon()
 	{
 		m_alwaysOutput = false;
+		if(m_runThread) nifalcon_stop();				
 		m_falconDevice->close();
 	}
 
