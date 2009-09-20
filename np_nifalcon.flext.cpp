@@ -106,6 +106,7 @@ public:
 		AddOutList("Button - Analog");
 		AddOutInt("Homing Status");
 
+		FLEXT_ADDBANG(0, nifalcon_output_request);
 		FLEXT_ADDMETHOD_(0, "open", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "init", nifalcon_anything);
 
@@ -113,8 +114,9 @@ public:
 		FLEXT_ADDMETHOD_(0, "manual_poll", nifalcon_manual_poll);
 		FLEXT_ADDMETHOD_(0, "start", nifalcon_start_thread);
 		FLEXT_ADDMETHOD_(0, "update", nifalcon_update_loop);
-		FLEXT_ADDMETHOD_(0, "output", nifalcon_output);
+		FLEXT_ADDMETHOD_(0, "output", nifalcon_output_request);
 		FLEXT_ADDMETHOD_(0, "count", nifalcon_count);
+		FLEXT_ADDMETHOD_(0, "initialize", nifalcon_nvent_firmware);
 		FLEXT_ADDMETHOD_(0, "nvent_firmware", nifalcon_nvent_firmware);
 		FLEXT_ADDMETHOD_(0, "close", nifalcon_close);
 		FLEXT_ADDMETHOD_(0, "stop", nifalcon_stop);
@@ -178,6 +180,16 @@ protected:
 	bool homing_state;
 	uint8_t button_state;
 
+	void nifalcon_output_request()
+	{
+		if(!m_alwaysOutput)
+		{
+			nifalcon_output();
+			return;
+		}
+		post("np_nifalcon: Cannot request output by bang/'output' message when auto_poll is on");
+	}
+	
 	void nifalcon_count()
 	{
 		ScopedMutex s(m_deviceMutex);
@@ -232,7 +244,7 @@ protected:
 		{
 			if(!m_falconDevice->getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 			{
-				post("np_nifalcon %d: Cannot load firmware - Error: %d", m_falconDevice->getErrorCode());
+				post("np_nifalcon %d: Cannot load firmware - Error: %d", m_deviceIndex,  m_falconDevice->getErrorCode());
 			}
 			else
 			{
@@ -257,6 +269,7 @@ protected:
 		if(m_runThread) nifalcon_stop();
 		ScopedMutex s(m_deviceMutex);
 		m_falconDevice->close();
+		post("np_nifalcon %d: Falcon device closed", m_deviceIndex);
 		m_deviceIndex = -1;
 		return;
 	}
@@ -471,6 +484,7 @@ protected:
 		}
 		ScopedMutex r(m_runMutex);
 		m_runThread = true;
+		post("np_nifalcon %d: Input thread started", m_deviceIndex);
 		while(m_runThread)
 		{
 			nifalcon_update_loop();
@@ -525,6 +539,7 @@ protected:
 private:
 	FLEXT_CALLBACK_A(nifalcon_anything)
 	FLEXT_CALLBACK(nifalcon_raw)
+	FLEXT_CALLBACK(nifalcon_output_request)	
 	FLEXT_CALLBACK(nifalcon_vector)
 	FLEXT_CALLBACK(nifalcon_manual_poll)
 	FLEXT_CALLBACK(nifalcon_auto_poll)
