@@ -48,14 +48,14 @@ class np_nifalcon:
 	class ScopedMutex
 	{
 		ScopedMutex() {}
-		
+
 	public:
 		ScopedMutex(ThrMutex& tm)
 		{
 			m = &tm;
 			m->Lock();
 		}
-		
+
 		~ScopedMutex()
 		{
 			m->Unlock();
@@ -82,7 +82,7 @@ public:
 		button_state(0)
 	{
 		// object setup
-		
+
 		for(int i = 0; i < 3; ++i)
 		{
 			m_motorVectorForce[i] = 0;
@@ -134,10 +134,10 @@ public:
 		post("Compiled on " __DATE__ " " __TIME__);
 
 	}
-	
+
 	virtual void Exit()
 	{
-		m_alwaysOutput = false;		
+		m_alwaysOutput = false;
 		if(m_runThread) nifalcon_stop();
 		m_falconDevice->close();
 		flext_base::Exit();
@@ -146,7 +146,7 @@ public:
 	virtual ~np_nifalcon()
 	{
 		m_alwaysOutput = false;
-		if(m_runThread) nifalcon_stop();				
+		if(m_runThread) nifalcon_stop();
 		m_falconDevice->close();
 	}
 
@@ -189,7 +189,7 @@ protected:
 		}
 		post("np_nifalcon: Cannot request output by bang/'output' message when auto_poll is on");
 	}
-	
+
 	void nifalcon_count()
 	{
 		ScopedMutex s(m_deviceMutex);
@@ -223,11 +223,11 @@ protected:
 	void nifalcon_vector()
 	{
 		post("np_nifalcon %d: Falcon force input now in vector mode", m_deviceIndex);
-		m_inRawMode = false;	
+		m_inRawMode = false;
 	}
 
 	void nifalcon_nvent_firmware()
-	{		
+	{
 		if(!m_falconDevice->isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
@@ -273,7 +273,7 @@ protected:
 		m_deviceIndex = -1;
 		return;
 	}
-	
+
 	void nifalcon_anything(const t_symbol *msg,int argc,t_atom *argv)
 	{
 		if(!strcmp(msg->s_name, "open"))
@@ -313,7 +313,7 @@ protected:
 			if(!m_falconDevice->setFirmwareFile(GetString(argv[0])))
 			{
 				post("np_nifalcon %d: Cannot find firmware file %s", m_deviceIndex, GetString(argv[0]));
-				return;				
+				return;
 			}
 			ScopedMutex s(m_deviceMutex);
 			if(!m_falconDevice->loadFirmware(10, false))
@@ -350,7 +350,7 @@ protected:
 		m_alwaysOutput = ao;
 		return;
 	}
-	
+
 	void nifalcon_update_loop()
 	{
 		bool ret = false;
@@ -364,9 +364,9 @@ protected:
 		//If we didn't get anything out of the IO loop, return
 		if(!ret) return;
 
-		//Put together the information 
+		//Put together the information
 		{
-			//lock to make sure we don't try to bang out half updated information 
+			//lock to make sure we don't try to bang out half updated information
 			ScopedMutex m(m_ioMutex);
 			int i = 0, buttons = 0;
 			//t_atom analog_list[];
@@ -385,22 +385,22 @@ protected:
 				coordinate_changed = true;
 				SetFloat(coordinate_list[i], m_falconDevice->getPosition()[i]);
 			}
-				
+
 			//Output digital values
 			buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
 			if(button_state != buttons)
-			{				
+			{
 				for(i = 0; i < 4; ++i)
 				{
 					SetInt(button_list[i], buttons & (1 << i));
 				}
 				button_state = buttons;
 				button_state_changed = true;
-			}			
+			}
 
 			//Output analog values
 			//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
-				
+
 			//Output homing values
 			if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
 			{
@@ -412,12 +412,12 @@ protected:
 			if(motor_changed || coordinate_changed || button_state_changed || homing_state_changed)
 				m_hasUpdated = true;
 		}
-		//If we're autopolling and we got this far, output		
+		//If we're autopolling and we got this far, output
 		if(m_alwaysOutput && m_hasUpdated) nifalcon_output();
 
 		//Update the device with the information from the patch
 		{
-			//lock to make sure we don't try to update information from a patch while it's written to the device object 
+			//lock to make sure we don't try to update information from a patch while it's written to the device object
 			ScopedMutex t(m_updateMutex);
 			//Now that we're done parsing what we got back, set the new internal values
 			if(!m_inRawMode)
@@ -428,9 +428,9 @@ protected:
 			{
 				m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
 			}
-				
+
 			m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
-				
+
 			m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
 		}
 	}
@@ -464,10 +464,10 @@ protected:
 		ToOutBang(0);
 		m_hasUpdated = false;
 	}
-	
+
 	void nifalcon_start_thread()
 	{
-		if(!m_falconDevice->isOpen())				
+		if(!m_falconDevice->isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
 			return;
@@ -491,7 +491,7 @@ protected:
 			flext::ThrYield();
 		}
 	}
-	
+
 	void nifalcon_motor_raw(int motor_1, int motor_2, int motor_3)
 	{
 		ScopedMutex s(m_updateMutex);
@@ -539,7 +539,7 @@ protected:
 private:
 	FLEXT_CALLBACK_A(nifalcon_anything)
 	FLEXT_CALLBACK(nifalcon_raw)
-	FLEXT_CALLBACK(nifalcon_output_request)	
+	FLEXT_CALLBACK(nifalcon_output_request)
 	FLEXT_CALLBACK(nifalcon_vector)
 	FLEXT_CALLBACK(nifalcon_manual_poll)
 	FLEXT_CALLBACK(nifalcon_auto_poll)
