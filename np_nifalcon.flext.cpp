@@ -71,10 +71,8 @@ public:
 		m_runThread(false),
 		m_isInited(false),
 		m_inRawMode(true),
-		m_errorCount(0),
 		m_ledState(0),
 		m_homingMode(false),
-		m_showIOError(false),
 		m_hasUpdated(false),
 		m_alwaysOutput(false),
 		m_falconDevice(new FalconDevice()),
@@ -110,7 +108,6 @@ public:
 
 		FLEXT_ADDMETHOD_(0, "open", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "init", nifalcon_anything);
-		FLEXT_ADDMETHOD_(0, "show_ioerror", nifalcon_anything);
 
 		FLEXT_ADDMETHOD_(0, "auto_poll", nifalcon_auto_poll);
 		FLEXT_ADDMETHOD_(0, "manual_poll", nifalcon_manual_poll);
@@ -135,24 +132,18 @@ public:
 		post("Compiled on " __DATE__ " " __TIME__);
 
 	}
-
 	
 	virtual void Exit()
 	{
-		if(m_runThread)
-		{
-			post("np_nifalcon %d: Shutting down IO thread", m_deviceIndex);
-			m_runThread = false;
-			m_threadCond.Wait();
-		}
+		m_alwaysOutput = false;		
 		m_falconDevice->close();
 		flext_base::Exit();
 	}
 
 	virtual ~np_nifalcon()
 	{
-		m_updateMutex.Unlock();
-		m_ioMutex.Unlock();	   
+		m_alwaysOutput = false;
+		m_falconDevice->close();
 	}
 
 protected:
@@ -160,28 +151,34 @@ protected:
 	int m_deviceIndex;
 	bool m_inRawMode;
 	bool m_isInited;
-	bool m_runThread;
-	bool m_showIOError;
-	int m_errorCount;
 	int m_ledState;
 	boost::array<double,3> m_motorVectorForce;
 	boost::array<int,3> m_motorRawForce;
 	bool m_homingMode;
-	bool m_hasUpdated;
-	bool m_alwaysOutput;
-	ThrCond m_threadCond;
+
+	volatile bool m_runThread;
+	ThrMutex m_deviceMutex;
 	ThrMutex m_updateMutex;
 	ThrMutex m_ioMutex;
+	ThrMutex m_runMutex;
+	bool m_hasUpdated;
+	bool m_alwaysOutput;
+
 	t_atom motor_list[3];
 	t_atom coordinate_list[3];
 	t_atom button_list[4];
 	bool motor_changed;
 	bool coordinate_changed;
+	bool homing_state_changed;
+	bool button_state_changed;
+	bool old_homing_state;
+	bool old_button_state;
 	bool homing_state;
 	uint8_t button_state;
 
 	void nifalcon_count()
 	{
+		ScopedMutex s(m_deviceMutex);
 		unsigned int count;
 		if(!m_falconDevice->getDeviceCount(count))
 		{
@@ -212,11 +209,11 @@ protected:
 	void nifalcon_vector()
 	{
 		post("np_nifalcon %d: Falcon force input now in vector mode", m_deviceIndex);
-		m_inRawMode = false;			
+		m_inRawMode = false;	
 	}
 
 	void nifalcon_nvent_firmware()
-	{
+	{		
 		if(!m_falconDevice->isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
@@ -228,16 +225,12 @@ protected:
 			post("np_nifalcon %d: Firmware already loaded, no need to reload...", m_deviceIndex);
 			return;
 		}
+		ScopedMutex s(m_deviceMutex);
 		for(int i = 0; i < 10; ++i)
 		{
 			if(!m_falconDevice->getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 			{
-				m_falconDevice->close();
-				if(!m_falconDevice->open(0))
-				{
-					post("Cannot open falcon - Error: %d", m_falconDevice->getErrorCode());
-					return;
-				}
+				post("np_nifalcon %d: Cannot load firmware - Error: %d", m_falconDevice->getErrorCode());
 			}
 			else
 			{
@@ -246,9 +239,9 @@ protected:
 			}
 		}
 		if(m_isInited)
-			post("np_nifalcon: loading nvent firmware finished");
+			post("np_nifalcon %d: loading nvent firmware finished", m_deviceIndex);
 		else
-			post("np_nifalcon: loading nvent firmware FAILED");		
+			post("np_nifalcon %d: loading nvent firmware FAILED", m_deviceIndex);
 	}
 
 	void nifalcon_close()
@@ -259,20 +252,15 @@ protected:
 			return;
 		}
 		m_isInited = false;
-		if(m_runThread)
-		{
-			m_runThread = false;
-			m_threadCond.Wait();
-		}
+		if(m_runThread) nifalcon_stop();
+		ScopedMutex s(m_deviceMutex);
 		m_falconDevice->close();
-		post("np_nifalcon %d: Falcon closed", m_deviceIndex);
 		m_deviceIndex = -1;
 		return;
 	}
 	
 	void nifalcon_anything(const t_symbol *msg,int argc,t_atom *argv)
 	{
-		ScopedMutex s(m_updateMutex);
 		if(!strcmp(msg->s_name, "open"))
 		{
 			if(m_falconDevice->isOpen())
@@ -280,6 +268,7 @@ protected:
 				post("np_nifalcon %d: Falcon already open", m_deviceIndex);
 				return;
 			}
+			ScopedMutex s(m_deviceMutex);
 			int index = -1;
 			if(argc == 1) index = GetInt(argv[0]);
 			else index = 0;
@@ -309,8 +298,9 @@ protected:
 			if(!m_falconDevice->setFirmwareFile(GetString(argv[0])))
 			{
 				post("np_nifalcon %d: Cannot find firmware file %s", m_deviceIndex, GetString(argv[0]));
-				return;
+				return;				
 			}
+			ScopedMutex s(m_deviceMutex);
 			if(!m_falconDevice->loadFirmware(10, false))
 			{
 				post("np_nifalcon %d: Could not load firmware: %d", m_deviceIndex, m_falconDevice->getErrorCode());
@@ -318,19 +308,6 @@ protected:
 			}
 			m_isInited = true;
 			post("np_nifalcon %d: Falcon init finished", m_deviceIndex);
-		}
-		else if (!strcmp(msg->s_name, "show_ioerror"))
-		{
-			if(!m_showIOError)
-			{
-				m_showIOError = true;
-				post("np_nifalcon: Now showing IO errors");
-			}
-			else
-			{
-				m_showIOError = false;
-				post("np_nifalcon: Now hiding IO errors");
-			}
 		}
 		else
 		{
@@ -350,101 +327,125 @@ protected:
 			post("np_nifalcon %d: No thread running", m_deviceIndex);
 			return;
 		}
+		bool ao = m_alwaysOutput;
+		m_alwaysOutput = false;
 		m_runThread = false;
-		post("np_nifalcon %d: Waiting for thread stop", m_deviceIndex);
-		m_threadCond.Wait();
+		ScopedMutex r(m_runMutex);
 		post("np_nifalcon %d: Input thread stopped", m_deviceIndex);
+		m_alwaysOutput = ao;
 		return;
 	}
 	
 	void nifalcon_update_loop()
 	{
-		if(m_falconDevice->runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC)))
+		bool ret = false;
+
+		//Run the IO Loop, locking the device while we do
 		{
+			ScopedMutex m(m_deviceMutex);
+			ret = m_falconDevice->runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC));
+		}
+
+		//If we didn't get anything out of the IO loop, return
+		if(!ret) return;
+
+		//Put together the information 
+		{
+			//lock to make sure we don't try to bang out half updated information 
+			ScopedMutex m(m_ioMutex);
+			int i = 0, buttons = 0;
+			//t_atom analog_list[];
+			//Output encoder values
+			for(i = 0; i < 3; ++i)
 			{
-				//lock to make sure we don't try to bang out half updated information 
-				ScopedMutex m(m_ioMutex);
-				int i = 0, buttons = 0;
-				//t_atom analog_list[];
-				motor_changed = false;
-				coordinate_changed = false;
+				if(GetInt(motor_list[i]) == (m_falconDevice->getFalconFirmware()->getEncoderValues())[i]) continue;
+				motor_changed = true;
+				SetInt(motor_list[i], m_falconDevice->getFalconFirmware()->getEncoderValues()[i]);
+			}
+
+			//Output kinematics values
+			for(i = 0; i < 3; ++i)
+			{
+				if(GetFloat(coordinate_list[i]) == m_falconDevice->getPosition()[i]) continue;
+				coordinate_changed = true;
+				SetFloat(coordinate_list[i], m_falconDevice->getPosition()[i]);
+			}
+				
+			//Output digital values
+			buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
+			if(button_state != buttons)
+			{				
+				for(i = 0; i < 4; ++i)
+				{
+					SetInt(button_list[i], buttons & (1 << i));
+				}
+				button_state = buttons;
+				button_state_changed = true;
+			}			
+
+			//Output analog values
+			//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
+				
+			//Output homing values
+			if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
+			{
+				homing_state = m_falconDevice->getFalconFirmware()->isHomed();
+				homing_state_changed = true;
+			}
+
+			//Confirm that we're ready to output if we have something new
+			if(motor_changed || coordinate_changed || button_state_changed || homing_state_changed)
 				m_hasUpdated = true;
-				//Output encoder values
-				for(i = 0; i < 3; ++i)
-				{
-					if(GetInt(motor_list[i]) == (m_falconDevice->getFalconFirmware()->getEncoderValues())[i]) continue;
-					motor_changed = true;
-					SetInt(motor_list[i], m_falconDevice->getFalconFirmware()->getEncoderValues()[i]);
-				}
-				if(motor_changed && m_alwaysOutput) ToOutList(1, 3, motor_list);
-
-				//Output kinematics values
-				for(i = 0; i < 3; ++i)
-				{
-					if(GetFloat(coordinate_list[i]) == m_falconDevice->getPosition()[i]) continue;
-					coordinate_changed = true;
-					SetFloat(coordinate_list[i], m_falconDevice->getPosition()[i]);
-				}
-				if(coordinate_changed && m_alwaysOutput) ToOutList(2, 3, coordinate_list);
-				
-				//Output digital values
-				buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
-				if(button_state != buttons)
-				{
-					for(i = 0; i < 4; ++i)
-					{
-						SetInt(button_list[i], buttons & (1 << i));
-					}
-					button_state = buttons;
-					if(m_alwaysOutput) ToOutList(3, 4, button_list);
-				}			
-
-				//Output analog values
-				//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
-				
-				//Output homing values
-				if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
-				{
-					homing_state = m_falconDevice->getFalconFirmware()->isHomed();
-					if(m_alwaysOutput) ToOutInt(5, homing_state);
-				}
-				if(m_alwaysOutput) ToOutBang(0);
-			}
-			
-			{
-				//lock to make sure we don't try to update information from a patch while it's written to the device object 
-				ScopedMutex t(m_updateMutex);
-				//Now that we're done parsing what we got back, set the new internal values
-				if(!m_inRawMode)
-				{
-					m_falconDevice->setForce(m_motorVectorForce);
-				}
-				else
-				{
-					m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
-				}
-				
-				m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
-				
-				m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
-			}
 		}
-		else
+		//If we're autopolling and we got this far, output		
+		if(m_alwaysOutput && m_hasUpdated) nifalcon_output();
+
+		//Update the device with the information from the patch
 		{
-			++m_errorCount;
-			if(m_showIOError) post("np_nifalcon: IO Loop Error %d : %d", m_errorCount, m_falconDevice->getErrorCode());
+			//lock to make sure we don't try to update information from a patch while it's written to the device object 
+			ScopedMutex t(m_updateMutex);
+			//Now that we're done parsing what we got back, set the new internal values
+			if(!m_inRawMode)
+			{
+				m_falconDevice->setForce(m_motorVectorForce);
+			}
+			else
+			{
+				m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
+			}
+				
+			m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
+				
+			m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
 		}
-		usleep(1000);
 	}
 
 	void nifalcon_output()
 	{
+		//If we haven't run a new successful loop yet, we have nothing to output
 		if(!m_hasUpdated) return;
+		//Make sure we don't collide with the I/O loop if we're manually polling
 		ScopedMutex s(m_ioMutex);
-		if(motor_changed) ToOutList(1, 3, motor_list);
-		if(coordinate_changed) ToOutList(2, 3, coordinate_list);
-		ToOutList(3, 4, button_list);
-		ToOutInt(5, homing_state);
+		if(motor_changed)
+		{
+			motor_changed = false;
+			ToOutList(1, 3, motor_list);
+		}
+		if(coordinate_changed)
+		{
+			coordinate_changed = false;
+			ToOutList(2, 3, coordinate_list);
+		}
+		if(button_state_changed)
+		{
+			button_state_changed = false;
+			ToOutList(3, 4, button_list);
+		}
+		if(homing_state_changed)
+		{
+			homing_state_changed = false;
+			ToOutInt(5, homing_state);
+		}
 		ToOutBang(0);
 		m_hasUpdated = false;
 	}
@@ -458,20 +459,20 @@ protected:
 		}
 		if(m_runThread)
 		{
-			post("Thread already running");
+			post("np_nifalcon %d: Thread already running", m_deviceIndex);
 			return;
 		}
 		if(!m_isInited)
 		{
-			post("Falcon must be initialized to start");
+			post("np_nifalcon %d: Falcon must be initialized to start", m_deviceIndex);
 			return;
 		}
+		ScopedMutex r(m_runMutex);
 		m_runThread = true;
-
 		while(m_runThread)
 		{
 			nifalcon_update_loop();
-			m_threadCond.Signal();
+			flext::ThrYield();
 		}
 	}
 	
