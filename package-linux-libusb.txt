@@ -1,6 +1,6 @@
 NAME=np_nifalcon
 BUILDTYPE=multi
 SRCS=np_nifalcon.flext.cpp 
-CFLAGS = -I/usr/include -I/usr/local/include -I/usr/local/include/libusb-1.0 -I/usr/local/include/falcon -DNIFALCON_LIBUSB 
-LIBS += -lnifalcon -lnifalcon_comm_libusb
+CFLAGS = -I/usr/include -I/usr/local/include
+LIBS += -lnifalcon -lusb-1.0
 

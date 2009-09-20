@@ -3,10 +3,9 @@
 
 NAME=np_nifalcon
 SRCS=np_nifalcon.flext.cpp 
-CFLAGS += -DNIFALCON_FTD2XX
 CFLAGS += -I"%ProgramFiles%/boost/boost_1_35_0/"
 #ifdef SHARED
-LIBS += -Lc:/MinGW/lib -lnifalcon_comm_ftd2xx -lnifalcon -lftd2xx
+LIBS += -Lc:/MinGW/lib -lnifalcon -lftd2xx
 #else
 #	LIBS += -DLIBFTDI -lnifalcon_libftdi_s -lftdi_s -lusb_s
 #endif
