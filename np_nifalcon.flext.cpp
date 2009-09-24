@@ -362,7 +362,10 @@ protected:
 		}
 
 		//If we didn't get anything out of the IO loop, return
-		if(!ret) return;
+		if(!ret)
+		{
+			return;
+		}
 
 		//Put together the information
 		{
@@ -381,7 +384,7 @@ protected:
 			//Output kinematics values
 			for(i = 0; i < 3; ++i)
 			{
-				if(GetFloat(coordinate_list[i]) == m_falconDevice->getPosition()[i]) continue;
+				if(fabs(GetFloat(coordinate_list[i]) - m_falconDevice->getPosition()[i]) < .000001 ) continue;
 				coordinate_changed = true;
 				SetFloat(coordinate_list[i], m_falconDevice->getPosition()[i]);
 			}
