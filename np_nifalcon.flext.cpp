@@ -439,6 +439,12 @@ protected:
 	{
 		//If we haven't run a new successful loop yet, we have nothing to output
 		if(!m_hasUpdated) return;
+
+		//Since this is the only function we output in, do a system level lock
+		//This calls critical_enter/exit on max and sys_lock on Pd
+		//Thanks to ClaudiusMaximus on freenode #dataflow for pointing this out.
+		//See also http://lists.puredata.info/pipermail/pd-list/2005-01/025473.html
+		Lock();
 		//Make sure we don't collide with the I/O loop if we're manually polling
 		ScopedMutex s(m_ioMutex);
 		if(motor_changed)
@@ -446,7 +452,7 @@ protected:
 			motor_changed = false;
 			ToOutList(1, 3, motor_list);
 		}
-		if(coordinate_changed)
+		if(coordinate_changed && !m_inRawMode)
 		{
 			coordinate_changed = false;
 			ToOutList(2, 3, coordinate_list);
@@ -462,6 +468,7 @@ protected:
 			ToOutInt(5, homing_state);
 		}
 		ToOutBang(0);
+		Unlock();
 		m_hasUpdated = false;
 	}
 
