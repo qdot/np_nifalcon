@@ -75,7 +75,6 @@ public:
 		m_homingMode(false),
 		m_hasUpdated(false),
 		m_alwaysOutput(false),
-		m_falconDevice(new FalconDevice()),
 		motor_changed(false),
 		coordinate_changed(false),
 		homing_state(false),
@@ -89,9 +88,9 @@ public:
 			m_motorRawForce[i] = 0;
 		}
 
-		m_falconDevice->setFalconFirmware<FalconFirmwareNovintSDK>();
-		m_falconDevice->setFalconGrip<FalconGripFourButton>();
-		m_falconDevice->setFalconKinematic<FalconKinematicStamper>();
+		m_falconDevice.setFalconFirmware<FalconFirmwareNovintSDK>();
+		m_falconDevice.setFalconGrip<FalconGripFourButton>();
+		m_falconDevice.setFalconKinematic<FalconKinematicStamper>();
 
 		// external setup
 		AddInAnything("Command Input");
@@ -128,7 +127,7 @@ public:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.5");
+		post("Novint Falcon External v1.5.2");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://www.github.com/qdot/np_nifalcon");
 		post("Compiled on " __DATE__ " " __TIME__);
@@ -139,7 +138,7 @@ public:
 	{
 		m_alwaysOutput = false;
 		if(m_runThread) nifalcon_stop();
-		m_falconDevice->close();
+		m_falconDevice.close();
 		flext_base::Exit();
 	}
 
@@ -147,11 +146,11 @@ public:
 	{
 		m_alwaysOutput = false;
 		if(m_runThread) nifalcon_stop();
-		m_falconDevice->close();
+		m_falconDevice.close();
 	}
 
 protected:
-	boost::shared_ptr<FalconDevice> m_falconDevice;
+	FalconDevice m_falconDevice;
 	int m_deviceIndex;
 	bool m_inRawMode;
 	bool m_isInited;
@@ -160,7 +159,7 @@ protected:
 	boost::array<int,3> m_motorRawForce;
 	bool m_homingMode;
 
-	volatile bool m_runThread;
+	bool m_runThread;
 	ThrMutex m_deviceMutex;
 	ThrMutex m_updateMutex;
 	ThrMutex m_ioMutex;
@@ -194,7 +193,7 @@ protected:
 	{
 		ScopedMutex s(m_deviceMutex);
 		unsigned int count;
-		if(!m_falconDevice->getDeviceCount(count))
+		if(!m_falconDevice.getDeviceCount(count))
 		{
 			post("np_nifalcon: Error while counting devices");
 			return;
@@ -228,12 +227,12 @@ protected:
 
 	void nifalcon_nvent_firmware()
 	{
-		if(!m_falconDevice->isOpen())
+		if(!m_falconDevice.isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
 			return;
 		}
-		if(m_falconDevice->isFirmwareLoaded())
+		if(m_falconDevice.isFirmwareLoaded())
 		{
 			m_isInited = true;
 			post("np_nifalcon %d: Firmware already loaded, no need to reload...", m_deviceIndex);
@@ -242,9 +241,15 @@ protected:
 		ScopedMutex s(m_deviceMutex);
 		for(int i = 0; i < 10; ++i)
 		{
-			if(!m_falconDevice->getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
+			if(!m_falconDevice.getFalconFirmware()->loadFirmware(false, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 			{
-				post("np_nifalcon %d: Cannot load firmware - Error: %d", m_deviceIndex,  m_falconDevice->getErrorCode());
+				//Completely close and reopen
+				m_falconDevice.close();
+				if(!m_falconDevice.open(m_deviceIndex))
+				{
+					post("np_nifalcon: Cannot open falcon device index %d - Lib Error Code: %d Device Error Code: %d", m_deviceIndex, m_falconDevice.getErrorCode(),  m_falconDevice.getFalconComm()->getDeviceErrorCode());
+					break;
+				}
 			}
 			else
 			{
@@ -260,7 +265,7 @@ protected:
 
 	void nifalcon_close()
 	{
-		if(!m_falconDevice->isOpen())
+		if(!m_falconDevice.isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
 			return;
@@ -268,7 +273,7 @@ protected:
 		m_isInited = false;
 		if(m_runThread) nifalcon_stop();
 		ScopedMutex s(m_deviceMutex);
-		m_falconDevice->close();
+		m_falconDevice.close();
 		post("np_nifalcon %d: Falcon device closed", m_deviceIndex);
 		m_deviceIndex = -1;
 		return;
@@ -278,7 +283,7 @@ protected:
 	{
 		if(!strcmp(msg->s_name, "open"))
 		{
-			if(m_falconDevice->isOpen())
+			if(m_falconDevice.isOpen())
 			{
 				post("np_nifalcon %d: Falcon already open", m_deviceIndex);
 				return;
@@ -288,9 +293,9 @@ protected:
 			if(argc == 1) index = GetInt(argv[0]);
 			else index = 0;
 			post("np_nifalcon: Opening first falcon found");
-			if(!m_falconDevice->open(index))
+			if(!m_falconDevice.open(index))
 			{
-				post("np_nifalcon: Cannot open falcon %d - Error: %d", index, m_falconDevice->getErrorCode());
+				post("np_nifalcon: Cannot open falcon %d - Error: %d", index, m_falconDevice.getErrorCode());
 				return;
 			}
 			m_deviceIndex = index;
@@ -299,26 +304,26 @@ protected:
 		}
 		else if (!strcmp(msg->s_name, "init"))
 		{
-			if(!m_falconDevice->isOpen())
+			if(!m_falconDevice.isOpen())
 			{
 				post("np_nifalcon: Falcon not open");
 				return;
 			}
-			if(m_falconDevice->isFirmwareLoaded())
+			if(m_falconDevice.isFirmwareLoaded())
 			{
 				m_isInited = true;
 				post("np_nifalcon %d: Firmware already loaded, no need to reload...", m_deviceIndex);
 				return;
 			}
-			if(!m_falconDevice->setFirmwareFile(GetString(argv[0])))
+			if(!m_falconDevice.setFirmwareFile(GetString(argv[0])))
 			{
 				post("np_nifalcon %d: Cannot find firmware file %s", m_deviceIndex, GetString(argv[0]));
 				return;
 			}
 			ScopedMutex s(m_deviceMutex);
-			if(!m_falconDevice->loadFirmware(10, false))
+			if(!m_falconDevice.loadFirmware(10, false))
 			{
-				post("np_nifalcon %d: Could not load firmware: %d", m_deviceIndex, m_falconDevice->getErrorCode());
+				post("np_nifalcon %d: Could not load firmware: %d", m_deviceIndex, m_falconDevice.getErrorCode());
 				return;
 			}
 			m_isInited = true;
@@ -332,7 +337,7 @@ protected:
 
 	void nifalcon_stop()
 	{
-		if(!m_falconDevice->isOpen())
+		if(!m_falconDevice.isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
 			return;
@@ -358,7 +363,7 @@ protected:
 		//Run the IO Loop, locking the device while we do
 		{
 			ScopedMutex m(m_deviceMutex);
-			ret = m_falconDevice->runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC));
+			ret = m_falconDevice.runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC));
 		}
 
 		//If we didn't get anything out of the IO loop, return
@@ -376,21 +381,21 @@ protected:
 			//Output encoder values
 			for(i = 0; i < 3; ++i)
 			{
-				if(GetInt(motor_list[i]) == (m_falconDevice->getFalconFirmware()->getEncoderValues())[i]) continue;
+				if(GetInt(motor_list[i]) == (m_falconDevice.getFalconFirmware()->getEncoderValues())[i]) continue;
 				motor_changed = true;
-				SetInt(motor_list[i], m_falconDevice->getFalconFirmware()->getEncoderValues()[i]);
+				SetInt(motor_list[i], m_falconDevice.getFalconFirmware()->getEncoderValues()[i]);
 			}
 
 			//Output kinematics values
 			for(i = 0; i < 3; ++i)
 			{
-				if(fabs(GetFloat(coordinate_list[i]) - m_falconDevice->getPosition()[i]) < .000001 ) continue;
+				if(fabs(GetFloat(coordinate_list[i]) - m_falconDevice.getPosition()[i]) < .000001 ) continue;
 				coordinate_changed = true;
-				SetFloat(coordinate_list[i], m_falconDevice->getPosition()[i]);
+				SetFloat(coordinate_list[i], m_falconDevice.getPosition()[i]);
 			}
 
 			//Output digital values
-			buttons = m_falconDevice->getFalconGrip()->getDigitalInputs();
+			buttons = m_falconDevice.getFalconGrip()->getDigitalInputs();
 			if(button_state != buttons)
 			{
 				for(i = 0; i < 4; ++i)
@@ -405,9 +410,9 @@ protected:
 			//We don't have analog values yet. Nothing will leave this output until I figured out analog. Implement later.
 
 			//Output homing values
-			if(m_falconDevice->getFalconFirmware()->isHomed() != homing_state)
+			if(m_falconDevice.getFalconFirmware()->isHomed() != homing_state)
 			{
-				homing_state = m_falconDevice->getFalconFirmware()->isHomed();
+				homing_state = m_falconDevice.getFalconFirmware()->isHomed();
 				homing_state_changed = true;
 			}
 
@@ -425,16 +430,16 @@ protected:
 			//Now that we're done parsing what we got back, set the new internal values
 			if(!m_inRawMode)
 			{
-				m_falconDevice->setForce(m_motorVectorForce);
+				m_falconDevice.setForce(m_motorVectorForce);
 			}
 			else
 			{
-				m_falconDevice->getFalconFirmware()->setForces(m_motorRawForce);
+				m_falconDevice.getFalconFirmware()->setForces(m_motorRawForce);
 			}
 
-			m_falconDevice->getFalconFirmware()->setHomingMode(m_homingMode);
+			m_falconDevice.getFalconFirmware()->setHomingMode(m_homingMode);
 
-			m_falconDevice->getFalconFirmware()->setLEDStatus(m_ledState);
+			m_falconDevice.getFalconFirmware()->setLEDStatus(m_ledState);
 		}
 	}
 
@@ -477,7 +482,7 @@ protected:
 
 	void nifalcon_start_thread()
 	{
-		if(!m_falconDevice->isOpen())
+		if(!m_falconDevice.isOpen())
 		{
 			post("np_nifalcon: Falcon not open");
 			return;
@@ -495,7 +500,7 @@ protected:
 		ScopedMutex r(m_runMutex);
 		m_runThread = true;
 		post("np_nifalcon %d: Input thread started", m_deviceIndex);
-		while(m_runThread)
+		while(m_runThread && m_falconDevice.isOpen())
 		{
 			nifalcon_update_loop();
 			flext::ThrYield();
