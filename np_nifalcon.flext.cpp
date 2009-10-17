@@ -499,12 +499,17 @@ protected:
 		}
 		ScopedMutex r(m_runMutex);
 		m_runThread = true;
+		Lock();
 		post("np_nifalcon %d: Input thread started", m_deviceIndex);
+		Unlock();
 		while(m_runThread && m_falconDevice.isOpen())
 		{
 			nifalcon_update_loop();
 			flext::ThrYield();
 		}
+		Lock();
+		post("np_nifalcon %d: Input thread exiting", m_deviceIndex);
+		Unlock();
 	}
 
 	void nifalcon_motor_raw(int motor_1, int motor_2, int motor_3)
