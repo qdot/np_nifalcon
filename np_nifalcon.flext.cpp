@@ -505,7 +505,7 @@ protected:
 		while(m_runThread && m_falconDevice.isOpen())
 		{
 			nifalcon_update_loop();
-			flext::ThrYield();
+			Sleep(.0005);
 		}
 		Lock();
 		post("np_nifalcon %d: Input thread exiting", m_deviceIndex);
