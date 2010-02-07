@@ -60,13 +60,12 @@
 #X msg 35 205 auto_poll;
 #X msg -43 205 manual_poll;
 #X obj -38 253 metro 1;
-#X obj -42 232 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X obj -42 232 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X text -46 163 polling types;
 #X text -47 186 recommended on pd;
 #X text -46 175 manual_poll highly;
 #X text 169 94 start and stop I/O thread;
-#X text 390 -1 np_nifalcon v1.5;
 #X text 361 14 by Nonpolynomial Labs;
 #X text 318 28 http://www.nonpolynomial.com;
 #X text 277 41 np_nifalcon and libnifalcon info at;
@@ -81,6 +80,10 @@ which seems to freeze the Pd GUI. manual_poll is recommended on Pd.
 #X text -37 456 - raw allows force input as raw values to the motors.
 vector allows force input as cartesian (x/y/z) values. You most likely
 want to use vector.;
+#X msg 156 133 sleep_time 1000;
+#X text 256 130 sleep time between I/O loops for thread;
+#X text 255 141 in usec. Should be at least 1000;
+#X text 421 -1 np_nifalcon;
 #X connect 0 1 14 0;
 #X connect 0 2 15 0;
 #X connect 0 3 16 0;
@@ -121,3 +124,4 @@ want to use vector.;
 #X connect 50 0 0 0;
 #X connect 51 0 0 0;
 #X connect 52 0 51 0;
+#X connect 67 0 0 0;
