@@ -78,7 +78,8 @@ public:
 		motor_changed(false),
 		coordinate_changed(false),
 		homing_state(false),
-		button_state(0)
+		button_state(0),
+		sleep_time(.001)
 	{
 		// object setup
 
@@ -108,6 +109,7 @@ public:
 		FLEXT_ADDBANG(0, nifalcon_output_request);
 		FLEXT_ADDMETHOD_(0, "open", nifalcon_anything);
 		FLEXT_ADDMETHOD_(0, "init", nifalcon_anything);
+		FLEXT_ADDMETHOD_(0, "sleep_time", nifalcon_anything);
 
 		FLEXT_ADDMETHOD_(0, "auto_poll", nifalcon_auto_poll);
 		FLEXT_ADDMETHOD_(0, "manual_poll", nifalcon_manual_poll);
@@ -127,7 +129,7 @@ public:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.5.2");
+		post("Novint Falcon External v1.6.0");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://www.github.com/qdot/np_nifalcon");
 		post("Compiled on " __DATE__ " " __TIME__);
@@ -178,7 +180,8 @@ protected:
 	bool old_button_state;
 	bool homing_state;
 	uint8_t button_state;
-
+	double sleep_time;
+	
 	void nifalcon_output_request()
 	{
 		if(!m_alwaysOutput)
@@ -272,7 +275,7 @@ protected:
 		}
 		m_isInited = false;
 		if(m_runThread) nifalcon_stop();
-		ScopedMutex s(m_deviceMutex);
+		//ScopedMutex s(m_deviceMutex);
 		m_falconDevice.close();
 		post("np_nifalcon %d: Falcon device closed", m_deviceIndex);
 		m_deviceIndex = -1;
@@ -329,6 +332,19 @@ protected:
 			m_isInited = true;
 			post("np_nifalcon %d: Falcon init finished", m_deviceIndex);
 		}
+		else if(!strcmp(msg->s_name, "sleep_time"))
+		{
+			//We take microseconds as arguments. Not sure if we have that level of granularity, but it never hurts to try.
+			if(argc == 1)
+			{
+				sleep_time = (double)GetInt(argv[0]) / (double)1000000;
+				post("Set sleep time to %f", sleep_time);
+			}
+			else
+			{
+				post("np_nifalcon: sleep_usec message takes one argument (microseconds to sleep in polling thread)");
+			}
+		}		
 		else
 		{
 			post("np_nifalcon: not a valid np_nifalcon message: %s", msg->s_name);
@@ -350,7 +366,7 @@ protected:
 		bool ao = m_alwaysOutput;
 		m_alwaysOutput = false;
 		m_runThread = false;
-		ScopedMutex r(m_runMutex);
+		//ScopedMutex r(m_runMutex);
 		post("np_nifalcon %d: Input thread stopped", m_deviceIndex);
 		m_alwaysOutput = ao;
 		return;
@@ -362,7 +378,7 @@ protected:
 
 		//Run the IO Loop, locking the device while we do
 		{
-			ScopedMutex m(m_deviceMutex);
+			//ScopedMutex m(m_deviceMutex);
 			ret = m_falconDevice.runIOLoop(FalconDevice::FALCON_LOOP_FIRMWARE | FalconDevice::FALCON_LOOP_GRIP | (m_inRawMode ? 0 : FalconDevice::FALCON_LOOP_KINEMATIC));
 		}
 
@@ -375,7 +391,7 @@ protected:
 		//Put together the information
 		{
 			//lock to make sure we don't try to bang out half updated information
-			ScopedMutex m(m_ioMutex);
+			//ScopedMutex m(m_ioMutex);
 			int i = 0, buttons = 0;
 			//t_atom analog_list[];
 			//Output encoder values
@@ -426,7 +442,7 @@ protected:
 		//Update the device with the information from the patch
 		{
 			//lock to make sure we don't try to update information from a patch while it's written to the device object
-			ScopedMutex t(m_updateMutex);
+			//ScopedMutex t(m_updateMutex);
 			//Now that we're done parsing what we got back, set the new internal values
 			if(!m_inRawMode)
 			{
@@ -505,7 +521,7 @@ protected:
 		while(m_runThread && m_falconDevice.isOpen())
 		{
 			nifalcon_update_loop();
-			Sleep(.0005);
+			Sleep(sleep_time);
 		}
 		Lock();
 		post("np_nifalcon %d: Input thread exiting", m_deviceIndex);
