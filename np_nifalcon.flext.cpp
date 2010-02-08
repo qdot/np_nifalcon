@@ -129,7 +129,7 @@ public:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.6.0");
+		post("Novint Falcon External v1.6.1");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://www.github.com/qdot/np_nifalcon");
 		post("Compiled on " __DATE__ " " __TIME__);
@@ -468,7 +468,10 @@ protected:
 		//This calls critical_enter/exit on max and sys_lock on Pd
 		//Thanks to ClaudiusMaximus on freenode #dataflow for pointing this out.
 		//See also http://lists.puredata.info/pipermail/pd-list/2005-01/025473.html
-		Lock();
+
+		//ONLY NEEDED FOR PD. LOCKS MAX
+		//Lock();
+		
 		//Make sure we don't collide with the I/O loop if we're manually polling
 		ScopedMutex s(m_ioMutex);
 		if(motor_changed)
@@ -492,7 +495,10 @@ protected:
 			ToOutInt(5, homing_state);
 		}
 		ToOutBang(0);
-		Unlock();
+
+		//ONLY NEEDED FOR PD. LOCKS MAX
+		//Unlock();
+		
 		m_hasUpdated = false;
 	}
 
