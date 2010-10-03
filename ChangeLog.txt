@@ -1,6 +1,10 @@
 np_nifalcon ChangeLog
 ===========================
 
+2010-10-02 Kyle Machulis <kyle@nonpolynomial.com>
+	* Release v1.6.2
+	* Added sleep_time message for resetting sleep values
+	* Fixed some threading issues
 2009-09-20 Kyle Machulis <kyle@nonpolynomial.com>
 	* Release v1.5
 	* Rewrote most of the external, many fixes to stability

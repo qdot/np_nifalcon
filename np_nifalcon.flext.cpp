@@ -1,7 +1,7 @@
 /*
  * Implementation file for Novint Falcon Max/Pd External
  *
- * Copyright (c) 2005-2009 Kyle Machulis/Nonpolynomial Labs <kyle@nonpolynomial.com>
+ * Copyright (c) 2005-2010 Kyle Machulis/Nonpolynomial Labs <kyle@nonpolynomial.com>
  *
  * More info on Nonpolynomial Labs @ http://www.nonpolynomial.com
  *
