@@ -129,7 +129,7 @@ public:
 		FLEXT_ADDMETHOD(3, nifalcon_led);
 		FLEXT_ADDMETHOD(4, nifalcon_homing_mode);
 
-		post("Novint Falcon External v1.6.1");
+		post("Novint Falcon External v1.6.2");
 		post("by Nonpolynomial Labs (http://www.nonpolynomial.com)");
 		post("Updates at http://www.github.com/qdot/np_nifalcon");
 		post("Compiled on " __DATE__ " " __TIME__);
