@@ -1,6 +1,7 @@
 == np_nifalcon Max/MSP and Pd External ==
 
 by Kyle Machulis <kyle@nonpolynomial.com>
+
 Nonpolynomial Labs - http://www.nonpolynomial.com
 
 Contributors:
